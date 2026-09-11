@@ -1,4 +1,6 @@
-import requests
+from sinch import SinchClient
+from flask import Flask, request, jsonify
+import requests, base64
 from dotenv import load_dotenv
 import os
 load_dotenv()
@@ -35,3 +37,22 @@ auth=(os.environ.get('SINCHUSER'), os.environ.get('SINCHPASSWORD')))
 
 data = response.json()
 print(data)
+
+app = Flask(__name__)
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.json
+    
+    #message information extraction
+    message = data.get("message", {})
+    text = message.get("contact_message", {}).get("text_message", {}).get("text", "")
+    channel = message.get("channel_identity", {}).get("channel", "SMS")
+    sender_identity = message.get("channel_identity", {}).get("identity", "")
+    
+    print(f"Received from {sender_identity} via {channel}: {text}")
+    
+    return jsonify({"status": "ok"}), 200
+
+if __name__ == "__main__":
+    app.run(port=3000)
