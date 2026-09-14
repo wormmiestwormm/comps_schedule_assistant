@@ -32,16 +32,15 @@ class SinchModule():
         sender_identity = message.get("channel_identity", {}).get("identity", "")
         
         print(f"Received from {sender_identity} via {channel}: {text}")
-        self.database.read_message(message, sender_identity)
+        self.main(text, sender_identity)
         
         return jsonify({"status": "ok"}), 200
     
-    def main(self, text, channel, sender_identity):
-        return_message = self.foundry_model.start_conversation(text, channel, sender_identity)
+    def main(self, text, sender_identity):
+        return_message = self.database.read_message(text, sender_identity)
         self.send_text(return_message)
         
-    def send_text(self, return_message):
-        phone_num = os.environ.get('PHONENUM')
+    def send_text(self, return_message, sender_identity):
         app_id = os.environ.get('SINCHAPPID')
         payload = {
             "app_id": app_id,
@@ -50,7 +49,7 @@ class SinchModule():
                 "channel_identities": [
                     {
                     "channel": "SMS",
-                    "identity": phone_num
+                    "identity": sender_identity
                     }
                 ]
                 }
