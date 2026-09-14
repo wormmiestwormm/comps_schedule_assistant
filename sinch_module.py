@@ -32,6 +32,7 @@ class SinchModule():
         sender_identity = message.get("channel_identity", {}).get("identity", "")
         
         print(f"Received from {sender_identity} via {channel}: {text}")
+        self.database.read_message(message, sender_identity)
         
         return jsonify({"status": "ok"}), 200
     
