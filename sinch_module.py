@@ -72,4 +72,4 @@ class SinchModule():
 
 if __name__ == "__main__":
     module = SinchModule()
-    module.main("view", "+13104069080")
+    module.main("reschedule 1 14:00 15:00", "+13104069080")
