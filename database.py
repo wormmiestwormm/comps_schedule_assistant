@@ -25,6 +25,8 @@ class Database:
     
     #decifer if tutor or student
     def read_message(self, message, phone_num):
+        print(message)
+        print(phone_num)
         with open('mock_people_database.csv', mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             
@@ -62,7 +64,7 @@ class Database:
             response = self.process_reschedule(message)
             if not response:
                 response = self.append_new_temp_app(message)
-        elif str_command == "view":
+        else: #str_command == "view"
             response = self.process_view(message)
         
         return response
@@ -159,6 +161,8 @@ class Database:
     #these require a 3rd phone number
     def process_view(self, message):
         re_command = re.search(r'^w+\s(\w+)', message)
+        if not re_command:
+            return self.return_indie_app_list(self.user)
         command = re_command.group()
         
         if command == "all":

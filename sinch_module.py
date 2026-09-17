@@ -38,9 +38,10 @@ class SinchModule():
     
     def main(self, text, sender_identity):
         return_message = self.database.read_message(text, sender_identity)
-        self.send_text(return_message)
+        self.send_text(return_message, sender_identity)
         
     def send_text(self, return_message, sender_identity):
+        sender_identity = str(sender_identity)
         app_id = os.environ.get('SINCHAPPID')
         payload = {
             "app_id": app_id,
@@ -71,4 +72,4 @@ class SinchModule():
 
 if __name__ == "__main__":
     module = SinchModule()
-    module.main("test message not from sinch", "SMS", "+13104069080")
+    module.main("view", "+13104069080")
