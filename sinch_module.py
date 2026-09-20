@@ -13,15 +13,14 @@ class SinchModule():
         self.database = Database()
         # retrieve sinch client information
         self.sinch_client = SinchClient(
-            key_id = os.environ.get("SINCHAPPID"),
+            key_id = os.environ.get("SINCHUSER"),
             key_secret = os.environ.get('SINCHPASSWORD'),
             project_id = os.environ.get('SINCHPROJECTID'),
             conversation_region="us"
         )
-        self.url = f"https://US.conversation.api.sinch.com/v1/projects/{os.environ.get('SINCHPROJECTID')}/messages:send"
+        self.url = f"https://us.conversation.api.sinch.com/v1/projects/{os.environ.get('SINCHPROJECTID')}/messages:send"
     
-    app = Flask(__name__)
-    @app.route("/webhook", methods=["POST"])
+    
     def webhook(self):
         data = request.json
         
@@ -42,6 +41,8 @@ class SinchModule():
         
     def send_text(self, return_message, sender_identity):
         sender_identity = str(sender_identity)
+        return_message = str(return_message)
+        print(f"----------return message-----------\n{return_message}")
         app_id = os.environ.get('SINCHAPPID')
         payload = {
             "app_id": app_id,
@@ -69,7 +70,13 @@ class SinchModule():
 
         data = response.json()
         print(data)
-
+        
+app = Flask(__name__)
+module = SinchModule()
+app.add_url_rule("/webhook", "webhook", module.webhook, methods=["POST"])
 if __name__ == "__main__":
     module = SinchModule()
-    module.main("reschedule 1 14:00 15:00", "+13104069080")
+    app.run(host="0.0.0.0", port=5000)
+    #module.main("request approve 0", "+13104069080")
+    
+    #reschedule 1 14:00 15:00

@@ -37,23 +37,29 @@ class Database:
                     break
         
         if self.user[3] == 'tutor':
+            print("user is tutor")
             response = self.parse_tutor_message(message)
         else:
+            print("user is student")
             response = self.parse_student_message(message)
         return response
     
     
     def parse_tutor_message(self, message):
         re_command = re.search(r'^(\w+)', message)
-        str_command = re_command.group()
+        str_command = re_command.group(1)
                 
         if str_command == "add":
+            print("add command")
             response = self.add_command(message)
         elif str_command == "request":
+            print("request command")
             response = self.approve_appointment(message)
         elif str_command == "view":
-                response = self.return_indie_app_list(message)
-                
+            print("view command")
+            response = self.process_view(message)
+        else:
+            print("missed command")
         return response
         
     def parse_student_message(self, message):
@@ -129,7 +135,7 @@ class Database:
     
     #verify that temporary appointment exists
     def _find_temp_app(self, temp_id):
-        with open('temp_apps.csv', mode='r', encoding='utf-8') as file:
+        with open('mock_temp_apps.csv', mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
                 if app[0] == temp_id:
@@ -176,14 +182,18 @@ class Database:
     #----------------------tutor specific interactions----------------------
     #these require a 3rd phone number
     def process_view(self, message):
-        re_command = re.search(r'^w+\s(\w+)', message)
+        re_command = re.search(r'^\w+\s(\w+)', message)
+        
         if not re_command:
+            print("individual schedule view")
             return self.return_indie_app_list(self.user)
-        command = re_command.group()
+        command = re_command.group(1)
         
         if command == "all":
+            print("complete schedule view")
             return self.return_complete_app_list()
         elif command == "day":
+            print("day schedule view")
             return self.return_day_list()
         else:
             return self.return_indie_app_list(command)
@@ -225,12 +235,12 @@ class Database:
         
         
     def add_command(self, message):
-        re_command = re.search(r'^w+\s(\w+)', message)
+        re_command = re.search(r'^\w+\s(\w+)', message)
         command = re_command.group()
         
         if command == "student":
-            re_name = re.search(r'(w+)$', message)
-            re_number = re.search(r'(w+)$', message)
+            re_name = re.search(r'(\w+)$', message)
+            re_number = re.search(r'(\w+)$', message)
             name = re_name.group()
             number = re_number.group()
             
@@ -268,13 +278,23 @@ class Database:
         
     #approve or deny schedule request
     def approve_appointment(self, message):
-        re_approval = re.search(r'request (w+)', message)
+        re_approval = re.search(r'^request (\w+)', message)
         re_temp_id = re.search(r'(\d+)$', message)
-        approval = re_approval.group()
-        temp_id = int(re_temp_id.group())
-        
+
+        if not re_approval or not re_temp_id:
+            return "invalid request format"
+
+        approval_text = re_approval.group(1).lower()
+        if approval_text not in {'approve', 'deny'}:
+            return "invalid approval value"
+
+        approval = 1 if approval_text == 'approve' else 0
+        temp_id = re_temp_id.group()
+
         if self._find_temp_app(temp_id):
             df = pd.read_csv('mock_temp_apps.csv')
-            df.loc[df['temp_id'] == temp_id, 'approval'] = approval
-            return f"temporary appointment {temp_id} approved"
-        return f"temporary appointment {temp_id} denied"
+            df.loc[df['temp_id'] == int(temp_id), 'approval'] = approval
+            df.to_csv('mock_temp_apps.csv', index=False)
+            return f"temporary appointment {temp_id} {approval_text}"
+        else:
+            return f"temporary appointment {temp_id} not found"
