@@ -1,6 +1,7 @@
 from sinch import SinchClient
 from flask import Flask, request, jsonify
 from database import Database
+from foundry_module import FoundryModel
 import requests, base64
 from dotenv import load_dotenv
 
@@ -10,6 +11,7 @@ class SinchModule():
     def __init__(self):
         load_dotenv()
         
+        self.foundry_module = FoundryModel()
         self.database = Database()
         # retrieve sinch client information
         self.sinch_client = SinchClient(
