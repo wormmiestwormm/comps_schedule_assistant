@@ -1,15 +1,20 @@
 from azure.ai.projects import AIProjectClient
 from azure.ai.projects.models import PromptAgentDefinition, Tool, FunctionTool
+from openai.types.responses.response_input_param import FunctionCallOutput, ResponseInputParam
 from azure.identity import DefaultAzureCredential
+from database import Database
+import json
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
 load_dotenv()
 class FoundryModel():
     def __init__(self):
+        self.database = Database()
+        endpoint = os.environ.get("FOUNDRYPROJECTENDPOINT")
         # retrieve azure foundry project
         self.project = AIProjectClient(
-            endpoint=os.environ.get("FOUNDRYENDPOINT"), #endpoint
+            endpoint=endpoint, #endpoint
             credential=DefaultAzureCredential()
         )
         self.openai = self.project.get_openai_client()
@@ -36,10 +41,10 @@ class FoundryModel():
             parameters={
                 "type": "object",
                 "properties": {
-                "specificity": {
-                        "type": "int",
-                        "description": "The filter the user wants to view their schedule with. 0 = their own schedule, 1 = the entire schedule, 2 = the schedule for the current day."
-                }
+                    "specificity": {
+                            "type": "integer",
+                            "description": "The filter the user wants to view their schedule with. 0 = their own schedule, 1 = the entire schedule, 2 = the schedule for the current day."
+                    }
                 },
                 "required": ["specificity"],
                 "additionalProperties": False
@@ -55,9 +60,37 @@ class FoundryModel():
         print(message)
         print(phone_num)
         
+        #add phone number check here
+        
         response = self.openai.responses.create(
             input=message,
             extra_body={"agent_reference": {"name": self.agent.name, "type": "agent_reference"}},
         )
         
-        print(f"answer: {response.output[0]}")
+        #Model may need multiple attempts to generate response, retry up to 5 times.
+        for r in range(5):
+            function_calls = [item for item in response.output if item.type == "function_call"]
+            if not function_calls:
+                break
+
+            input_list: ResponseInputParam = []
+            for item in function_calls:
+                if item.name == "view_app_arguments":
+                    result = self.database.process_view(**json.loads(item.arguments))
+                else:
+                    result = f"Unknown function: {item.name}"
+
+                input_list.append(
+                    FunctionCallOutput(
+                    type="function_call_output",
+                    call_id=item.call_id,
+                    output=json.dumps({"result": result}),
+                    )
+                )
+        response = self.openai.responses.create(
+            input=input_list,
+            conversation=self.conversation.id,
+            extra_body={"agent_reference": {"name": self.agent.name, "type": "agent_reference"}},
+        )
+        print(f"Agent response: {response.output_text}")
+        return response

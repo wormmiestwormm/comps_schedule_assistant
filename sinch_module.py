@@ -1,6 +1,5 @@
 from sinch import SinchClient
 from flask import Flask, request, jsonify
-from database import Database
 from foundry_module import FoundryModel
 import requests, base64
 from dotenv import load_dotenv
@@ -12,7 +11,6 @@ class SinchModule():
         load_dotenv()
         
         self.foundry_module = FoundryModel()
-        self.database = Database()
         # retrieve sinch client information
         self.sinch_client = SinchClient(
             key_id = os.environ.get("SINCHUSER"),
@@ -38,7 +36,7 @@ class SinchModule():
         return jsonify({"status": "ok"}), 200
     
     def main(self, text, sender_identity):
-        return_message = self.database.read_message(text, sender_identity)
+        return_message = self.foundry_module.read_message(text, sender_identity)
         self.send_text(return_message, sender_identity)
         
     def send_text(self, return_message, sender_identity):
@@ -78,7 +76,8 @@ module = SinchModule()
 app.add_url_rule("/webhook", "webhook", module.webhook, methods=["POST"])
 if __name__ == "__main__":
     module = SinchModule()
-    app.run(host="0.0.0.0", port=5000)
-    #module.main("request approve 0", "+13104069080")
+    #app.run(host="0.0.0.0", port=5000)
+    module.main("Hello, can I see my appointments for the week?", "13104069080")
+    print("hello!")
     
     #reschedule 1 14:00 15:00

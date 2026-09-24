@@ -5,27 +5,13 @@ from datetime import datetime
 
 class Database:
     def init(self):
+        self.phone_num
         self.user
         self.og_app
         self.temp_app
-        
-    
-    """
-    reschedule: reschedule <og_day_int> <new_day_int> <start> <end>
-    view appointments: view 
-    
-    Tutor specific:
-    add student: add student <student name> <phone_number>
-    add new appointment: add appointment <student_id> <day> <start_time> <end_time>
-    view appointments for student: view <student_id>
-    view appointments for day: view day
-    view appointments for week: view all
-    approve appointment request: request <approve>/<deny> <temp_id>
-    """
     
     #decifer if tutor or student
-    def read_message(self, message, phone_num):
-        print(message)
+    def find_user(self, phone_num):
         print(phone_num)
         with open('mock_people_database.csv', mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
@@ -36,13 +22,8 @@ class Database:
                     self.user = u
                     break
         
-        if self.user[3] == 'tutor':
-            print("user is tutor")
-            response = self.parse_tutor_message(message)
-        else:
-            print("user is student")
-            response = self.parse_student_message(message)
-        return response
+        print(f"user is :{self.user[3]}")
+
     
     
     def parse_tutor_message(self, message):
@@ -181,22 +162,22 @@ class Database:
     
     #----------------------tutor specific interactions----------------------
     #these require a 3rd phone number
-    def process_view(self, message):
-        re_command = re.search(r'^\w+\s(\w+)', message)
-        
-        if not re_command:
+    def process_view(self, specificity=1):
+        print("process_view accessed")
+        if specificity == 0:
             print("individual schedule view")
-            return self.return_indie_app_list(self.user)
-        command = re_command.group(1)
-        
-        if command == "all":
+            return self.return_indie_app_list()
+        elif specificity == 1:
             print("complete schedule view")
             return self.return_complete_app_list()
-        elif command == "day":
+        elif specificity == 2:
             print("day schedule view")
             return self.return_day_list()
+        elif specificity == 3:
+            print("student's schedule view")
+            return self.return_day_list()
         else:
-            return self.return_indie_app_list(command)
+            return "Error: specificity argument was not one of the established values, please try again."
         
     
     def return_complete_app_list(self):
