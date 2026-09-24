@@ -37,7 +37,7 @@ class Database:
             #find user number in database
             for s in reader:
                 if name in s[2]:
-                    print(f"student found: {u}")
+                    print(f"student found: {s}")
                     return s
         
         return "name not in database"
