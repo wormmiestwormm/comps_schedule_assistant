@@ -10,7 +10,6 @@ import os
 load_dotenv()
 class FoundryModel():
     def __init__(self):
-        self.database = Database()
         endpoint = os.environ.get("FOUNDRYPROJECTENDPOINT")
         # retrieve azure foundry project
         self.project = AIProjectClient(
@@ -43,10 +42,14 @@ class FoundryModel():
                 "properties": {
                     "specificity": {
                             "type": "integer",
-                            "description": "The filter the user wants to view their schedule with. 0 = their own schedule, 1 = the entire schedule, 2 = the schedule for the current day."
+                            "description": "The filter the user wants to view their schedule with. 0 = their own schedule, 1 = the entire schedule, 2 = the schedule for the current day, 3 = the schedule for a specific student that is not the user."
+                    },
+                    "student_name": {
+                        "type": ["string", "null"],
+                        "description": "The first or full name of the student that the user wants to see the schedule for. Only fill this out if specificity = 3, otherwise leave as null."
                     }
                 },
-                "required": ["specificity"],
+                "required": ["specificity", "student_name"],
                 "additionalProperties": False
             },
             description="Determine the specific kind of schedule and appointments that the user wants to see.",
@@ -61,6 +64,10 @@ class FoundryModel():
         print(phone_num)
         
         #add phone number check here
+        database = Database()
+        user_found = database.find_user(phone_num)
+        if not user_found:
+            return None
         
         response = self.openai.responses.create(
             input=message,
@@ -68,29 +75,39 @@ class FoundryModel():
         )
         
         #Model may need multiple attempts to generate response, retry up to 5 times.
-        for r in range(5):
-            function_calls = [item for item in response.output if item.type == "function_call"]
-            if not function_calls:
-                break
+        tool_calls = [
+            item for item in response.output
+            if getattr(item, "type", None) == "function_call"
+        ]
+        if not tool_calls:
+            return response.output_text
+        input_list = []
+        for tool_call in tool_calls:
+            if tool_call.name == "view_app_arguments":
+                result = database.process_view(**json.loads(tool_call.arguments))
+            else:
+                result = f"not a function call: {tool_call.name}"
 
-            input_list: ResponseInputParam = []
-            for item in function_calls:
-                if item.name == "view_app_arguments":
-                    result = self.database.process_view(**json.loads(item.arguments))
-                else:
-                    result = f"Unknown function: {item.name}"
+            input_list.append(
+                {
+                    "type": "function_call",
+                    "call_id": tool_call.call_id,
+                    "name": tool_call.name,
+                    "arguments": tool_call.arguments,
+                }
+            )
 
-                input_list.append(
-                    FunctionCallOutput(
-                    type="function_call_output",
-                    call_id=item.call_id,
-                    output=json.dumps({"result": result}),
-                    )
-                )
-        response = self.openai.responses.create(
+            input_list.append(
+                {
+                    "type": "function_call_output",
+                    "call_id": tool_call.call_id,
+                    "output": json.dumps({"result": result}),
+                }
+            )
+        print("ai responding to result")
+        follow_up = self.openai.responses.create(
             input=input_list,
-            conversation=self.conversation.id,
             extra_body={"agent_reference": {"name": self.agent.name, "type": "agent_reference"}},
         )
-        print(f"Agent response: {response.output_text}")
-        return response
+        print(f"Agent response: {follow_up.output_text}")
+        return follow_up.output_text

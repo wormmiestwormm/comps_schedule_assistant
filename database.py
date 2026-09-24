@@ -12,6 +12,7 @@ class Database:
     
     #decifer if tutor or student
     def find_user(self, phone_num):
+        print("attempting to find user")
         print(phone_num)
         with open('mock_people_database.csv', mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
@@ -19,11 +20,27 @@ class Database:
             #find user number in database
             for u in reader:
                 if u[2] == phone_num:
+                    print(f"user is: {u[3]}")
+                    self.phone_num = phone_num
                     self.user = u
-                    break
-        
-        print(f"user is :{self.user[3]}")
+                    return True
+        print(f"user {phone_num} not found")
+        return False
 
+
+    #find student in database by name
+    def find_student(self, name):
+        print(f"finding {name} in mock_people_database")
+        with open('mock_people_database.csv', mode='r', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            
+            #find user number in database
+            for s in reader:
+                if name in s[2]:
+                    print(f"student found: {u}")
+                    return s
+        
+        return "name not in database"
     
     
     def parse_tutor_message(self, message):
@@ -162,11 +179,11 @@ class Database:
     
     #----------------------tutor specific interactions----------------------
     #these require a 3rd phone number
-    def process_view(self, specificity=1):
+    def process_view(self, specificity=1, student_name=None):
         print("process_view accessed")
         if specificity == 0:
             print("individual schedule view")
-            return self.return_indie_app_list()
+            return self.return_indie_app_list(self.user)
         elif specificity == 1:
             print("complete schedule view")
             return self.return_complete_app_list()
@@ -175,7 +192,8 @@ class Database:
             return self.return_day_list()
         elif specificity == 3:
             print("student's schedule view")
-            return self.return_day_list()
+            student = self.find_student(student_name)
+            return self.return_indie_app_list(student)
         else:
             return "Error: specificity argument was not one of the established values, please try again."
         

@@ -37,6 +37,8 @@ class SinchModule():
     
     def main(self, text, sender_identity):
         return_message = self.foundry_module.read_message(text, sender_identity)
+        if not return_message:
+            return None
         self.send_text(return_message, sender_identity)
         
     def send_text(self, return_message, sender_identity):
