@@ -157,24 +157,6 @@ class Database:
 
         #will also return message for the tutor, requires second phone number though
         return f"Appointment for {self.og_app[0]} changed to {new_day}, {new_start} - {new_end}"
-    
-    
-    #returns app or temp app for user
-    def return_indie_app_list(self, person):
-        return_list = []
-        og_app_ids = []
-        with open('mock_temp_apps.csv', mode='r', encoding='utf-8') as file:
-            reader = csv.reader(file)
-            for app in reader:
-                if app[2] == person[0] and app[6] == 1 and app[7] == 0:
-                    return_list.append(app)
-                    og_app_ids.append(app[1])
-        with open('mock_schedule.csv', mode='r', encoding='utf-8') as file:
-            reader = csv.reader(file)
-            for app in reader:
-                if app[1] == person[0] and app[0] not in og_app_ids:
-                    return_list.append(app)
-        return return_list
         
     
     #----------------------tutor specific interactions----------------------
@@ -233,6 +215,24 @@ class Database:
         return return_list
         
         
+    #returns app or temp app for user
+    def return_indie_app_list(self, person):
+        return_list = []
+        og_app_ids = []
+        with open('mock_temp_apps.csv', mode='r', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            for app in reader:
+                if app[2] == person[0] and app[6] == 1 and app[7] == 0:
+                    return_list.append(app)
+                    og_app_ids.append(app[1])
+        with open('mock_schedule.csv', mode='r', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            for app in reader:
+                if app[1] == person[0] and app[0] not in og_app_ids:
+                    return_list.append(app)
+        return return_list
+    
+    
     def add_command(self, message):
         re_command = re.search(r'^\w+\s(\w+)', message)
         command = re_command.group()
