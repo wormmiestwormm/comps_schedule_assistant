@@ -232,7 +232,19 @@ class Database:
                     return_list.append(app)
         return return_list
     
-    
+    def add_new_student(self, name, phone_num):
+        df = pd.read_csv('mock_people_database.csv')
+        if df.shape[0] == 0:
+            id = 0
+        else:
+            id = df.shape[0] + 1
+
+        new_student = [id, name, phone_num]
+        with open('mock_people_database.csv', mode='a', encoding='utf-8', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(new_student)
+        return f"New student {name} added."
+
     def add_command(self, message):
         re_command = re.search(r'^\w+\s(\w+)', message)
         command = re_command.group()

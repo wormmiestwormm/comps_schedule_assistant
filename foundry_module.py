@@ -137,6 +137,10 @@ class FoundryModel():
         for tool_call in tool_calls:
             if tool_call.name == "view_app_arguments":
                 result = database.process_view(**json.loads(tool_call.arguments))
+            elif tool_call.name == "add_student_arguments":
+                result = database.add_new_student(**json.loads(tool_call.arguments))
+            elif tool_call.name == "add_appointment_arguments":
+                pass
             else:
                 result = f"not a function call: {tool_call.name}"
 
