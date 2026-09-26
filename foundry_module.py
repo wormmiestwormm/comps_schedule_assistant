@@ -29,8 +29,15 @@ class FoundryModel():
         if not user_found:
             return None
         
+        convo_id = database.get_convo_id()
+        if not convo_id:
+            conversation = self.openai.conversations.create()
+            convo_id = conversation.id
+            database.set_convo_id(convo_id)
+        
         response = self.openai.responses.create(
             input=message,
+            conversation=convo_id,
             extra_body={"agent_reference": {"name": self.agent_name, "type": "agent_reference"}},
         )
         
@@ -71,6 +78,7 @@ class FoundryModel():
         print("ai responding to result")
         follow_up = self.openai.responses.create(
             input=input_list,
+            conversation=convo_id,
             extra_body={"agent_reference": {"name": self.agent_name, "type": "agent_reference"}},
         )
         print(f"Agent response: {follow_up.output_text}")

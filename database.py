@@ -42,6 +42,13 @@ class Database:
         
         return "name not in database"
     
+    def set_convo_id(self, convo_id):
+        df = pd.read_csv('mock_people_database.csv')
+        df.loc[df['id'] == int(self.user[0]), 'convo_id'] = convo_id
+        df.to_csv('mock_people_database.csv', index=False)
+        
+    def get_convo_id(self):
+        return self.user[4]
     
     def parse_tutor_message(self, message):
         re_command = re.search(r'^(\w+)', message)
