@@ -9,6 +9,7 @@ class Database:
         self.user
         self.og_app
         self.temp_app
+        self.student
     
     #decifer if tutor or student
     def find_user(self, phone_num):
@@ -38,9 +39,10 @@ class Database:
             for s in reader:
                 if name in s[2]:
                     print(f"student found: {s}")
-                    return s
+                    self.student = s
+                    return True
         
-        return "name not in database"
+        return False
     
     def set_convo_id(self, convo_id):
         df = pd.read_csv('mock_people_database.csv')
@@ -181,8 +183,9 @@ class Database:
             return self.return_day_list()
         elif specificity == 3:
             print("student's schedule view")
-            student = self.find_student(student_name)
-            return self.return_indie_app_list(student)
+            if not self.find_student(student_name):
+                return f"student \'{student_name}\' not found in database."
+            return self.return_indie_app_list(self.student)
         else:
             return "Error: specificity argument was not one of the established values, please try again."
         
@@ -252,47 +255,23 @@ class Database:
             writer.writerow(new_student)
         return f"New student {name} added."
 
-    def add_command(self, message):
-        re_command = re.search(r'^\w+\s(\w+)', message)
-        command = re_command.group()
-        
-        if command == "student":
-            re_name = re.search(r'(\w+)$', message)
-            re_number = re.search(r'(\w+)$', message)
-            name = re_name.group()
-            number = re_number.group()
-            
-            df = pd.read_csv('mock_people_database.csv')
-            if df.shape[0] == 0:
-                id = 0
-            else:
-                id = df.shape[0] + 1
-            new_student = [id, name, number]
-            with open('mock_people_database.csv', mode='a', encoding='utf-8', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow(new_student)
-            response = new_student
-        elif command == "appointment":
-            re_student_id = re.search(r'^add appointment (\d+)', message)
-            re_day = re.search(r'^add appointment \d+ (\d)', message)
-            re_start = re.search(r'(\d+:\d+)\s\d+:\d+$', message)
-            re_end = re.search(r'(\d+:\d+)$', message)
-            student_id = re_student_id.group()
-            day = re_day.group()
-            start = re_start.group()
-            end = re_end.group()
-                        
-            df = pd.read_csv('mock_schedule.csv')
-            if df.shape[0] == 0:
-                id = 0
-            else:
-                id = df.shape[0] + 1
-            new_app = [id, student_id, day, start, end]
-            with open('mock_schedule.csv', mode='a', encoding='utf-8', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow(new_app)
-            response = new_app
-        return response
+    def add_new_app(self, student_name, day, start_time, end_time):
+        if self.check_conflicts(day, start_time, end_time):
+            return "conflicts with another appointment, select a different time."
+        if not self.find_student(student_name):
+            return f"student \'{student_name}\' not found in database. Make sure the student is registered in the database first."
+
+        df = pd.read_csv('mock_schedule.csv')
+        if df.shape[0] == 0:
+            id = 0
+        else:
+            id = df.shape[0] + 1
+        new_app = [id, self.student[0], day, start_time, end_time]
+        with open('mock_schedule.csv', mode='a', encoding='utf-8', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(new_app)
+        return f"Appointment for {student_name} on {day}, {start_time}-{end_time} added."
+    
         
     #approve or deny schedule request
     def approve_appointment(self, message):

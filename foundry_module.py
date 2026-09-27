@@ -55,7 +55,7 @@ class FoundryModel():
             elif tool_call.name == "add_student_arguments":
                 result = database.add_new_student(**json.loads(tool_call.arguments))
             elif tool_call.name == "add_appointment_arguments":
-                pass
+                result = database.add_new_app(**json.loads(tool_call.arguments))
             else:
                 result = f"not a function call: {tool_call.name}"
 
