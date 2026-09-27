@@ -109,71 +109,6 @@ class Database:
         
         return response
     
-    
-    #check for conflicts with standard schedule AND any existing temp appointments
-    def process_reschedule(self, message):
-        parts = message.strip().split()
-
-        if len(parts) == 4:
-            ap_day = parts[1]
-            new_day = parts[1]
-            new_start = parts[2]
-            new_end = parts[3]
-        elif len(parts) == 5:
-            ap_day = parts[1]
-            new_day = parts[2]
-            new_start = parts[3]
-            new_end = parts[4]
-        else:
-            return "invalid reschedule format"
-
-        if not re.fullmatch(r'\d+', ap_day):
-            return "invalid appointment day"
-
-        if self._find_og_app(ap_day) == False:
-            return "original appointment not found"
-        conflict_check_result = self.check_conflicts(new_day, new_start, new_end)
-        if conflict_check_result:
-            return conflict_check_result
-        return self.append_new_temp_app(new_day, new_start, new_end)
-        
-        
-    def check_conflicts(self, new_day, new_start, new_end):
-        og_app_id = self.og_app[0] if self.og_app else None
-
-        with open('mock_schedule.csv', mode='r', encoding='utf-8') as file:
-            reader = csv.reader(file)
-            for app in reader:
-                if app[0] == og_app_id:
-                    continue
-                if app[2] == new_day and (app[3] < new_end and app[4] > new_start):
-                    return f"conflict with standard appointment {app[0]}"
-        with open('mock_temp_apps.csv', mode='r', encoding='utf-8') as file:
-            reader = csv.reader(file)
-            for app in reader:
-                if app[1] == og_app_id:
-                    continue
-                if app[3] == new_day and (app[4] < new_end and app[5] > new_start):
-                    return f"conflict with standard appointment {app[0]}"
-    
-    
-    #append new temp reschedule
-    def append_new_temp_app(self, new_day, new_start, new_end):
-        df = pd.read_csv('mock_temp_apps.csv')
-        if df.shape[0] == 0:
-            id = 0
-        else:
-            id = df.shape[0] + 1
-        new_temp_app = [id, self.og_app[0], self.user[0], new_day, new_start, new_end, 0, 0]
-        print(f"new_temp_app: {new_temp_app}")
-        with open('mock_temp_apps.csv', mode='a', encoding='utf-8', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(new_temp_app)
-
-        #will also return message for the tutor, requires second phone number though
-        return f"Appointment for {self.og_app[0]} changed to {new_day}, {new_start} - {new_end}"
-        
-    
     #----------------------View schedule methods----------------------
     def process_view(self, specificity=1, student_name=None):
         print("process_view accessed")
@@ -247,6 +182,96 @@ class Database:
                     return_list.append(app)
         return return_list
     
+    #--------------------------Reschedule Process-----------------------------
+    #check for conflicts with standard schedule AND any existing temp appointments
+    def process_reschedule(self, message):
+        parts = message.strip().split()
+
+        if len(parts) == 4:
+            ap_day = parts[1]
+            new_day = parts[1]
+            new_start = parts[2]
+            new_end = parts[3]
+        elif len(parts) == 5:
+            ap_day = parts[1]
+            new_day = parts[2]
+            new_start = parts[3]
+            new_end = parts[4]
+        else:
+            return "invalid reschedule format"
+
+        if not re.fullmatch(r'\d+', ap_day):
+            return "invalid appointment day"
+
+        if self._find_og_app(ap_day) == False:
+            return "original appointment not found"
+        conflict_check_result = self.check_conflicts(new_day, new_start, new_end)
+        if conflict_check_result:
+            return conflict_check_result
+        return self.append_new_temp_app(new_day, new_start, new_end)
+            
+            
+    def check_conflicts(self, new_day, new_start, new_end):
+        og_app_id = self.og_app[0] if self.og_app else None
+
+        with open('mock_schedule.csv', mode='r', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            for app in reader:
+                if app[0] == og_app_id:
+                    continue
+                if app[2] == new_day and (app[3] < new_end and app[4] > new_start):
+                    return f"conflict with standard appointment {app[0]}"
+        with open('mock_temp_apps.csv', mode='r', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            for app in reader:
+                if app[1] == og_app_id:
+                    continue
+                if app[3] == new_day and (app[4] < new_end and app[5] > new_start):
+                    return f"conflict with standard appointment {app[0]}"
+        
+        
+    #append new temp reschedule
+    def append_new_temp_app(self, new_day, new_start, new_end):
+        df = pd.read_csv('mock_temp_apps.csv')
+        if df.shape[0] == 0:
+            id = 0
+        else:
+            id = df.shape[0] + 1
+        new_temp_app = [id, self.og_app[0], self.user[0], new_day, new_start, new_end, 0, 0]
+        print(f"new_temp_app: {new_temp_app}")
+        with open('mock_temp_apps.csv', mode='a', encoding='utf-8', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(new_temp_app)
+
+        #will also return message for the tutor, requires second phone number though
+        return f"Appointment for {self.og_app[0]} changed to {new_day}, {new_start} - {new_end}"
+    
+    #approve or deny schedule request
+    def approve_appointment(self, message):
+        re_approval = re.search(r'^request (\w+)', message)
+        re_temp_id = re.search(r'(\d+)$', message)
+
+        if not re_approval or not re_temp_id:
+            return "invalid request format"
+
+        approval_text = re_approval.group(1).lower()
+        if approval_text not in {'approve', 'deny'}:
+            return "invalid approval value"
+
+        approval = 1 if approval_text == 'approve' else 0
+        temp_id = re_temp_id.group()
+    
+        if self._find_temp_app(temp_id):
+            df = pd.read_csv('mock_temp_apps.csv')
+            df.loc[df['temp_id'] == int(temp_id), 'approval'] = approval
+            df.to_csv('mock_temp_apps.csv', index=False)
+            return f"temporary appointment {temp_id} {approval_text}"
+        else:
+            return f"temporary appointment {temp_id} not found"
+        
+
+    #-----------------------Adding new entries to database (Tutor Specific)----------------------------
+    #Add new student to database
     def add_new_student(self, name, phone_num):
         df = pd.read_csv('mock_people_database.csv')
         if df.shape[0] == 0:
@@ -260,6 +285,7 @@ class Database:
             writer.writerow(new_student)
         return f"New student {name} added."
 
+    #Add new appointment to database
     def add_new_app(self, student_name, day, start_time, end_time):
         if self.check_conflicts(day, start_time, end_time):
             return "conflicts with another appointment, select a different time."
@@ -276,27 +302,3 @@ class Database:
             writer = csv.writer(file)
             writer.writerow(new_app)
         return f"Appointment for {student_name} on {day}, {start_time}-{end_time} added."
-    
-        
-    #approve or deny schedule request
-    def approve_appointment(self, message):
-        re_approval = re.search(r'^request (\w+)', message)
-        re_temp_id = re.search(r'(\d+)$', message)
-
-        if not re_approval or not re_temp_id:
-            return "invalid request format"
-
-        approval_text = re_approval.group(1).lower()
-        if approval_text not in {'approve', 'deny'}:
-            return "invalid approval value"
-
-        approval = 1 if approval_text == 'approve' else 0
-        temp_id = re_temp_id.group()
-
-        if self._find_temp_app(temp_id):
-            df = pd.read_csv('mock_temp_apps.csv')
-            df.loc[df['temp_id'] == int(temp_id), 'approval'] = approval
-            df.to_csv('mock_temp_apps.csv', index=False)
-            return f"temporary appointment {temp_id} {approval_text}"
-        else:
-            return f"temporary appointment {temp_id} not found"
