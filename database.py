@@ -11,14 +11,15 @@ class Database:
         self.temp_app
         self.student
     
-    #decifer if tutor or student
+    #------------------------Getters and Setters-----------------------------------
+    #find and set current userbfrom database
     def find_user(self, phone_num):
         print("attempting to find user")
         print(phone_num)
         with open('mock_people_database.csv', mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             
-            #find user number in database
+            #find user phone number in database
             for u in reader:
                 if u[2] == phone_num:
                     print(f"user is: {u[3]}")
@@ -29,26 +30,52 @@ class Database:
         return False
 
 
-    #find student in database by name
+    #find student in database by name (for when a tutor needs to reference a specific student).
     def find_student(self, name):
         print(f"finding {name} in mock_people_database")
         with open('mock_people_database.csv', mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             
-            #find user number in database
+            #find student id in database
             for s in reader:
                 if name in s[2]:
                     print(f"student found: {s}")
                     self.student = s
                     return True
-        
+        print(f"student {name} not found")
         return False
     
+    #verify that original appointment exists
+    def _find_og_app(self, ap_day):
+        with open('mock_schedule.csv', mode='r', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            for app in reader:
+                if app[1] == self.user[0] and app[2] == ap_day:
+                    self.og_app = app
+                    print(f"original appointment on {ap_day} found")
+                    return True
+        print(f"original appointment on {ap_day} not found")
+        return False
+        
+    #verify that temporary appointment exists
+    def _find_temp_app(self, temp_id):
+        with open('mock_temp_apps.csv', mode='r', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            for app in reader:
+                if app[0] == temp_id:
+                    self.temp_app = app
+                    print(f"temporary appointment {temp_id} found")
+                    return True
+        print(f"temporary appointment {temp_id} not found")
+        return False
+    
+    #Set conversation id if none exists already
     def set_convo_id(self, convo_id):
         df = pd.read_csv('mock_people_database.csv')
         df.loc[df['id'] == int(self.user[0]), 'convo_id'] = convo_id
         df.to_csv('mock_people_database.csv', index=False)
-        
+    
+    #get conversation id
     def get_convo_id(self):
         return self.user[4]
     
@@ -130,27 +157,6 @@ class Database:
                     return f"conflict with standard appointment {app[0]}"
     
     
-    #verify that original appointment exists
-    def _find_og_app(self, ap_day):
-        with open('mock_schedule.csv', mode='r', encoding='utf-8') as file:
-            reader = csv.reader(file)
-            for app in reader:
-                if app[1] == self.user[0] and app[2] == ap_day:
-                    self.og_app = app
-                    return True
-        return False
-    
-    #verify that temporary appointment exists
-    def _find_temp_app(self, temp_id):
-        with open('mock_temp_apps.csv', mode='r', encoding='utf-8') as file:
-            reader = csv.reader(file)
-            for app in reader:
-                if app[0] == temp_id:
-                    self.temp_app = app
-                    return True
-        return False
-    
-    
     #append new temp reschedule
     def append_new_temp_app(self, new_day, new_start, new_end):
         df = pd.read_csv('mock_temp_apps.csv')
@@ -168,8 +174,7 @@ class Database:
         return f"Appointment for {self.og_app[0]} changed to {new_day}, {new_start} - {new_end}"
         
     
-    #----------------------tutor specific interactions----------------------
-    #these require a 3rd phone number
+    #----------------------View schedule methods----------------------
     def process_view(self, specificity=1, student_name=None):
         print("process_view accessed")
         if specificity == 0:
