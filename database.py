@@ -184,27 +184,10 @@ class Database:
     
     #--------------------------Reschedule Process-----------------------------
     #check for conflicts with standard schedule AND any existing temp appointments
-    def process_reschedule(self, message):
-        parts = message.strip().split()
-
-        if len(parts) == 4:
-            ap_day = parts[1]
-            new_day = parts[1]
-            new_start = parts[2]
-            new_end = parts[3]
-        elif len(parts) == 5:
-            ap_day = parts[1]
-            new_day = parts[2]
-            new_start = parts[3]
-            new_end = parts[4]
-        else:
-            return "invalid reschedule format"
-
-        if not re.fullmatch(r'\d+', ap_day):
-            return "invalid appointment day"
-
-        if self._find_og_app(ap_day) == False:
-            return "original appointment not found"
+    def process_reschedule(self, o_app_day, new_day, new_start, new_end):
+        if not self._find_og_app(o_app_day):
+            return f"The user's appointment on {o_app_day} was not found. Please clarify with the user."
+        
         conflict_check_result = self.check_conflicts(new_day, new_start, new_end)
         if conflict_check_result:
             return conflict_check_result
@@ -227,7 +210,7 @@ class Database:
                 if app[1] == og_app_id:
                     continue
                 if app[3] == new_day and (app[4] < new_end and app[5] > new_start):
-                    return f"conflict with standard appointment {app[0]}"
+                    return f"conflict with temporary appointment {app[0]}"
         
         
     #append new temp reschedule

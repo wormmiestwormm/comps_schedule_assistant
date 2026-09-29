@@ -56,6 +56,8 @@ class FoundryModel():
                 result = database.add_new_student(**json.loads(tool_call.arguments))
             elif tool_call.name == "add_appointment_arguments":
                 result = database.add_new_app(**json.loads(tool_call.arguments))
+            elif tool_call.name == "add_reschedule_request_arguments":
+                result = database.process_reschedule(**json.loads(tool_call.arguments))
             else:
                 result = f"not a function call: {tool_call.name}"
 

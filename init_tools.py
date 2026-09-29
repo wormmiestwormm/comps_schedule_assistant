@@ -74,6 +74,34 @@ def build_tools():
         description="For a new appointment to be added, gathers the student's name, the appointment day, the start time, and end time.",
         strict=True
     )
+    add_reschedule_request_arguments = FunctionTool(
+        name="add_reschedule_request_arguments",
+        parameters={
+            "type": "object",
+            "properties": {
+                "original_appointment_day": {
+                    "type": "string",
+                    "description": "the day the original appointment was scheduled for."
+                },
+                "new_appointment_day": {
+                    "type": "string",
+                    "description": "the day the user wants to reschedule to. Usually comes after the original appointment day is mentioned."
+                },
+                "start_time": {
+                    "type": "string",
+                    "description": "the starting time of the new appointment. Structured \'HH:MM\'. Example: \'10:00\', \'15:00\'"
+                },
+                "end_time": {
+                    "type": "string",
+                    "description": "the ending time of the new appointment. If not mentioned, recomfirm with the user what end time they would want. Structured \'HH:MM\'. Example: \'10:00\', \'15:00\'"
+                }
+            },
+            "required": ["original_appointment_day", "new_appointment_day", "start_time", "end_time"],
+            "additionalProperties": False
+        },
+        description="For a new appointment to be added, gathers the student's name, the appointment day, the start time, and end time.",
+        strict=True
+    )
     
-    tools = [view_app_arguments, add_student_arguments, add_app_arguments]
+    tools = [view_app_arguments, add_student_arguments, add_app_arguments, add_reschedule_request_arguments]
     return tools
