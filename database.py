@@ -69,6 +69,12 @@ class Database:
         print(f"temporary appointment {temp_id} not found")
         return False
     
+    def _find_temp_app(self):
+        df = pd.read_csv("data.csv")
+        filtered_df = df[df["student_id"] == self.student[0]]
+        print(filtered_df)
+        return filtered_df
+    
     #Set conversation id if none exists already
     def set_convo_id(self, convo_id):
         df = pd.read_csv('mock_people_database.csv')
@@ -230,27 +236,31 @@ class Database:
         return f"Appointment for {self.og_app[0]} changed to {new_day}, {new_start} - {new_end}"
     
     #approve or deny schedule request
-    def approve_appointment(self, message):
-        re_approval = re.search(r'^request (\w+)', message)
-        re_temp_id = re.search(r'(\d+)$', message)
+    def approve_appointment(self, student_name, approval, temp_id=None):
+        if not self.find_student(student_name):
+            return f"student \'{student_name}\' not found in database. Make sure the student is registered in the database first."
 
-        if not re_approval or not re_temp_id:
-            return "invalid request format"
-
-        approval_text = re_approval.group(1).lower()
-        if approval_text not in {'approve', 'deny'}:
-            return "invalid approval value"
-
-        approval = 1 if approval_text == 'approve' else 0
-        temp_id = re_temp_id.group()
-    
-        if self._find_temp_app(temp_id):
-            df = pd.read_csv('mock_temp_apps.csv')
-            df.loc[df['temp_id'] == int(temp_id), 'approval'] = approval
-            df.to_csv('mock_temp_apps.csv', index=False)
-            return f"temporary appointment {temp_id} {approval_text}"
+        if temp_id:
+            if self._find_temp_app(temp_id):
+                df = pd.read_csv('mock_temp_apps.csv')
+                df.loc[df['temp_id'] == int(temp_id), 'approval'] = approval
+                df.to_csv('mock_temp_apps.csv', index=False)
+                return f"temporary appointment {temp_id} {approval}"
+            else:
+                return f"temporary appointment {temp_id} not found"
         else:
-            return f"temporary appointment {temp_id} not found"
+            temp_app_list = self._find_temp_app()
+            if len(temp_app_list) > 1:
+                return_message = ("student has many temporary appointment requests. "
+                                  "Send this list back to the student and ask to clarify "
+                                  "with the temporary appointment's id number. "
+                                  f"\n{temp_app_list}")
+                return return_message
+            else:
+                df = pd.read_csv('mock_temp_apps.csv')
+                df.loc[df['temp_id'] == int(temp_app_list[0][0]), 'approval'] = approval
+                df.to_csv('mock_temp_apps.csv', index=False)
+                return f"temporary appointment {temp_id} {approval}"
         
 
     #-----------------------Adding new entries to database (Tutor Specific)----------------------------

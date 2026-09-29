@@ -99,9 +99,33 @@ def build_tools():
             "required": ["original_appointment_day", "new_appointment_day", "start_time", "end_time"],
             "additionalProperties": False
         },
-        description="For a new appointment to be added, gathers the student's name, the appointment day, the start time, and end time.",
+        description="Gather necessary information to add a temporary rescheduled appointment to the database. gathers the original appointment day, the new rescheduled day, the new start-time, and new end-time.",
+        strict=True
+    )
+    approve_request_arguments = FunctionTool(
+        name="approve_request_arguments",
+        parameters={
+            "type": "object",
+            "properties": {
+                "student_name": {
+                    "type": "string",
+                    "description": "the day the original appointment was scheduled for."
+                 },
+                 "approval": {
+                    "type": "boolean",
+                    "description": "The tutor's approval or dissapproval of the temporary rescheduling. approved = True, denied = False"
+                },
+                "temp_id": {
+                    "type": ["integer", "null"],
+                    "description": "the id number of the rescheduled appointment. Not necessary initially. Only fill this argument in when the student name is not enough to find the temporary appointment."
+                }
+            },
+            "required": ["student_name", "approval", "temp_id"],
+            "additionalProperties": False
+        },
+        description="Gather information necessary to approve the rescheduling of an appointment. Gather the student name, approval, and, only if needed, the temp_id",
         strict=True
     )
     
-    tools = [view_app_arguments, add_student_arguments, add_app_arguments, add_reschedule_request_arguments]
+    tools = [view_app_arguments, add_student_arguments, add_app_arguments, add_reschedule_request_arguments, approve_request_arguments]
     return tools
