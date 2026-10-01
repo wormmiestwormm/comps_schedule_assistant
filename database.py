@@ -85,37 +85,18 @@ class Database:
     def get_convo_id(self):
         return self.user[4]
     
-    def parse_tutor_message(self, message):
-        re_command = re.search(r'^(\w+)', message)
-        str_command = re_command.group(1)
-                
-        if str_command == "add":
-            print("add command")
-            response = self.add_command(message)
-        elif str_command == "request":
-            print("request command")
-            response = self.approve_appointment(message)
-        elif str_command == "view":
-            print("view command")
-            response = self.process_view(message)
-        else:
-            print("missed command")
-        return response
-        
-    def parse_student_message(self, message):
-        re_command = re.search(r'^(\w+)', message)
-        str_command = re_command.group()
-        
-        if str_command == "reschedule":
-            response = self.process_reschedule(message)
-            if not response:
-                response = self.append_new_temp_app(message)
-        else: #str_command == "view"
-            response = self.process_view(message)
-        
-        return response
     
     #----------------------View schedule methods----------------------
+    def _convert_app_list_times(self, app_list):
+        for app in app_list:
+            if app[0] in ("app_id", "temp_id"):
+                continue
+            start_index, end_index = (4, 5) if len(app) > 5 else (3, 4)
+            app[start_index], app[end_index] = self.convert_24_to_12h(
+                app[start_index], app[end_index]
+            )
+        return app_list
+
     def process_view(self, specificity=1, student_name=None):
         print("process_view accessed")
         if specificity == 0:
@@ -150,7 +131,7 @@ class Database:
             for app in reader:
                 if app[0] not in og_app_ids:
                     return_list.append(app)
-        return return_list
+        return self._convert_app_list_times(return_list)
         
         
     def return_day_list(self):
@@ -168,7 +149,7 @@ class Database:
             for app in reader:
                 if app[3] == curr_day and app[0] not in og_app_ids:
                     return_list.append(app)
-        return return_list
+        return self._convert_app_list_times(return_list)
         
         
     #returns app or temp app for user
@@ -186,7 +167,7 @@ class Database:
             for app in reader:
                 if app[1] == person[0] and app[0] not in og_app_ids:
                     return_list.append(app)
-        return return_list
+        return self._convert_app_list_times(return_list)
     
     #--------------------------Reschedule Process-----------------------------
     #check for conflicts with standard schedule AND any existing temp appointments
@@ -231,9 +212,11 @@ class Database:
         with open('mock_temp_apps.csv', mode='a', encoding='utf-8', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(new_temp_app)
-
+            
+        ap_start = self.convert_24_to_12h(new_start)
+        ap_end = self.convert_24_to_12h(new_end)
         #will also return message for the tutor, requires second phone number though
-        return f"Appointment for {self.og_app[0]} changed to {new_day}, {new_start} - {new_end}"
+        return f"Appointment for {self.og_app[0]} changed to {new_day}, {ap_start}-{ap_end}."
     
     #approve or deny schedule request
     def approve_appointment(self, student_name, approval, temp_id=None):
@@ -294,4 +277,12 @@ class Database:
         with open('mock_schedule.csv', mode='a', encoding='utf-8', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(new_app)
-        return f"Appointment for {student_name} on {day}, {start_time}-{end_time} added."
+        
+        ap_start, ap_end = self.convert_24_to_12h(start_time, end_time)
+        return f"Appointment for {student_name} on {day}, {ap_start}-{ap_end} added."
+    
+    #convert 24 hour time to am/pm time for the azure agent.
+    def convert_24_to_12h(self, start_str, end_str):
+        obj_start = datetime.strptime(start_str, "%H:%M")
+        obj_end = datetime.strptime(end_str, "%H:%M")
+        return obj_start.strftime("%I:%M %p"), obj_end.strftime("%I:%M %p")

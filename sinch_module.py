@@ -42,7 +42,7 @@ class SinchModule():
         self.send_text(return_message, sender_identity)
         
     def send_text(self, return_message, sender_identity):
-        sender_identity = str(sender_identity)
+        sender_identity = "+" + str(sender_identity)
         return_message = str(return_message)
         number = str(os.environ.get('SINCHPHONENUMBER'))
         print(f"----------return message-----------\n{return_message}")
@@ -81,8 +81,8 @@ module = SinchModule()
 app.add_url_rule("/webhook", "webhook", module.webhook, methods=["POST"])
 if __name__ == "__main__":
     module = SinchModule()
-    #app.run(host="0.0.0.0", port=5000)
-    module.main("Hello, can I see an appointment?", "+13104069080")
-    print("hello!")
+    app.run(host="0.0.0.0", port=5000)
+    #module.main("Hello, can I see an appointment?", "+13104069080")
+    #print("hello!")
     
     #reschedule 1 14:00 15:00
