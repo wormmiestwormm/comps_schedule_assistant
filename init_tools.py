@@ -57,7 +57,7 @@ def build_tools():
                 },
                 "app_day": {
                     "type": "string",
-                    "description": "the day the appointment is scheduled for."
+                    "description": "the day the appointment is scheduled for. Must be lowercase."
                 },
                 "start_time": {
                     "type": "string",
@@ -81,11 +81,11 @@ def build_tools():
             "properties": {
                 "original_appointment_day": {
                     "type": "string",
-                    "description": "the day the original appointment was scheduled for."
+                    "description": "the day the original appointment was scheduled for. Must be lowercase."
                 },
                 "new_appointment_day": {
                     "type": "string",
-                    "description": "the day the user wants to reschedule to. Usually comes after the original appointment day is mentioned."
+                    "description": "the day the user wants to reschedule to. Usually comes after the original appointment day is mentioned. Must be lowercase."
                 },
                 "start_time": {
                     "type": "string",
