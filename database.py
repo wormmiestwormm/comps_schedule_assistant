@@ -32,13 +32,16 @@ class Database:
 
     #find student in database by name (for when a tutor needs to reference a specific student).
     def find_student(self, name):
+        query = (name or "").strip().lower()
         print(f"finding {name} in mock_people_database")
         with open('mock_people_database.csv', mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             
             #find student id in database
             for s in reader:
-                if name in s[2]:
+                if len(s) < 2:
+                    continue
+                if query and query in s[1].strip().lower():
                     print(f"student found: {s}")
                     self.student = s
                     return True
@@ -123,7 +126,7 @@ class Database:
         with open('mock_temp_apps.csv', mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
-                if app[6] == 1 and app[7] == 0:
+                if app[6] == '1' and app[7] == '0':
                     return_list.append(app)
                     og_app_ids.append(app[1])
         with open('mock_schedule.csv', mode='r', encoding='utf-8') as file:
@@ -135,19 +138,24 @@ class Database:
         
         
     def return_day_list(self):
-        curr_day = datetime.now().isoweekday()
+        curr_day = datetime.now().strftime('%A').lower()
         return_list = []
         og_app_ids = []
         with open('mock_temp_apps.csv', mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
-                if app[3] == curr_day and (app[6] == 1 and app[7] == 0):
-                    return_list.append(app)
+                if len(app) < 8 or app[0] == 'temp_id':
+                    continue
+                if app[6] == '1' and app[7] == '0':
                     og_app_ids.append(app[1])
+                    if app[3].lower() == curr_day:
+                        return_list.append(app)
         with open('mock_schedule.csv', mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
-                if app[3] == curr_day and app[0] not in og_app_ids:
+                if len(app) < 5 or app[0] == 'app_id':
+                    continue
+                if app[2].lower() == curr_day and app[0] not in og_app_ids:
                     return_list.append(app)
         return self._convert_app_list_times(return_list)
         
@@ -159,7 +167,7 @@ class Database:
         with open('mock_temp_apps.csv', mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
-                if app[2] == person[0] and app[6] == 1 and app[7] == 0:
+                if app[2] == person[0] and app[6] == '1' and app[7] == '0':
                     return_list.append(app)
                     og_app_ids.append(app[1])
         with open('mock_schedule.csv', mode='r', encoding='utf-8') as file:
