@@ -1,28 +1,54 @@
 import csv
+import os
 import pandas as pd
-import re
 from datetime import datetime
 
+PEOPLE_CSV = "mock_people_database.csv"
+SCHEDULE_CSV = "mock_schedule.csv"
+TEMP_APPS_CSV = "mock_temp_apps.csv"
+
+#Column positions in mock_people_database.csv.
+#Inferred from find_user / get_convo_id / set_convo_id. If your CSV header
+#differs, this is the only place that needs to change.
+PEOPLE_ID = 0
+PEOPLE_NAME = 1
+PEOPLE_PHONE = 2
+PEOPLE_CONVO = 4
+
+
 class Database:
-    def init(self):
-        self.phone_num
-        self.user
-        self.og_app
-        self.temp_app
-        self.student
-    
+    def __init__(self, data_dir="."):
+        # data_dir lets tests point at a temp copy of the CSVs instead of
+        # relying on the process working directory.
+        self.data_dir = data_dir
+        self.phone_num = None
+        self.user = None
+        self.og_app = None
+        self.temp_app = None
+        self.student = None
+
+    def _path(self, filename):
+        return os.path.join(self.data_dir, filename)
+
+    @staticmethod
+    def _next_id(df):
+        # max existing id (first column) + 1. Unlike row-count based ids this
+        # never skips values or collides with existing rows.
+        ids = pd.to_numeric(df.iloc[:, 0], errors="coerce").dropna()
+        return 0 if ids.empty else int(ids.max()) + 1
+
     #------------------------Getters and Setters-----------------------------------
-    #find and set current userbfrom database
+    #find and set current user from database
     def find_user(self, phone_num):
         print("attempting to find user")
         print(phone_num)
-        with open('mock_people_database.csv', mode='r', encoding='utf-8') as file:
+        with open(self._path(PEOPLE_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
-            
+
             #find user phone number in database
             for u in reader:
-                if u[2] == phone_num:
-                    print(f"user is: {u[3]}")
+                if len(u) > PEOPLE_PHONE and u[PEOPLE_PHONE] == phone_num:
+                    print(f"user is: {u[PEOPLE_NAME]}")
                     self.phone_num = phone_num
                     self.user = u
                     return True
@@ -32,25 +58,22 @@ class Database:
 
     #find student in database by name (for when a tutor needs to reference a specific student).
     def find_student(self, name):
-        query = (name or "").strip().lower()
-        print(f"finding {name} in mock_people_database")
-        with open('mock_people_database.csv', mode='r', encoding='utf-8') as file:
+        print(f"finding {name} in {PEOPLE_CSV}")
+        with open(self._path(PEOPLE_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
-            
-            #find student id in database
+
+            #find student in database
             for s in reader:
-                if len(s) < 2:
-                    continue
-                if query and query in s[1].strip().lower():
+                if len(s) > PEOPLE_NAME and name.lower() in s[PEOPLE_NAME].lower():
                     print(f"student found: {s}")
                     self.student = s
                     return True
         print(f"student {name} not found")
         return False
-    
+
     #verify that original appointment exists
     def _find_og_app(self, ap_day):
-        with open('mock_schedule.csv', mode='r', encoding='utf-8') as file:
+        with open(self._path(SCHEDULE_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
                 if app[1] == self.user[0] and app[2] == ap_day:
@@ -59,36 +82,45 @@ class Database:
                     return True
         print(f"original appointment on {ap_day} not found")
         return False
-        
+
     #verify that temporary appointment exists
     def _find_temp_app(self, temp_id):
-        with open('mock_temp_apps.csv', mode='r', encoding='utf-8') as file:
+        with open(self._path(TEMP_APPS_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
-                if app[0] == temp_id:
+                if app[0] == str(temp_id):
                     self.temp_app = app
                     print(f"temporary appointment {temp_id} found")
                     return True
         print(f"temporary appointment {temp_id} not found")
         return False
-    
-    def _find_temp_app(self):
-        df = pd.read_csv("data.csv")
-        filtered_df = df[df["student_id"] == self.student[0]]
-        print(filtered_df)
-        return filtered_df
-    
+
+    #all temporary appointments belonging to the currently selected student
+    def _find_student_temp_apps(self):
+        found = []
+        with open(self._path(TEMP_APPS_CSV), mode='r', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            for app in reader:
+                if len(app) > 2 and app[2] == self.student[0]:
+                    found.append(app)
+        # first row may be the header, which never matches a student id
+        return found
+
     #Set conversation id if none exists already
     def set_convo_id(self, convo_id):
-        df = pd.read_csv('mock_people_database.csv')
-        df.loc[df['id'] == int(self.user[0]), 'convo_id'] = convo_id
-        df.to_csv('mock_people_database.csv', index=False)
-    
+        # dtype=str: an empty convo_id column would otherwise load as float64
+        # and reject a string value on current pandas versions.
+        df = pd.read_csv(self._path(PEOPLE_CSV), dtype=str)
+        df.loc[df['id'] == str(self.user[PEOPLE_ID]), 'convo_id'] = convo_id
+        df.to_csv(self._path(PEOPLE_CSV), index=False)
+
     #get conversation id
     def get_convo_id(self):
-        return self.user[4]
-    
-    
+        if self.user is not None and len(self.user) > PEOPLE_CONVO:
+            return self.user[PEOPLE_CONVO]
+        return None
+
+
     #----------------------View schedule methods----------------------
     def _convert_app_list_times(self, app_list):
         for app in app_list:
@@ -99,6 +131,11 @@ class Database:
                 app[start_index], app[end_index]
             )
         return app_list
+
+    @staticmethod
+    def _is_active_temp(app):
+        # csv.reader yields strings, so compare against "1" / "0", not ints.
+        return len(app) > 7 and str(app[6]) == "1" and str(app[7]) == "0"
 
     def process_view(self, specificity=1, student_name=None):
         print("process_view accessed")
@@ -118,153 +155,147 @@ class Database:
             return self.return_indie_app_list(self.student)
         else:
             return "Error: specificity argument was not one of the established values, please try again."
-        
-    
+
+
     def return_complete_app_list(self):
         return_list = []
         og_app_ids = []
-        with open('mock_temp_apps.csv', mode='r', encoding='utf-8') as file:
+        with open(self._path(TEMP_APPS_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
-                if app[6] == '1' and app[7] == '0':
+                if self._is_active_temp(app):
                     return_list.append(app)
                     og_app_ids.append(app[1])
-        with open('mock_schedule.csv', mode='r', encoding='utf-8') as file:
+        with open(self._path(SCHEDULE_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
                 if app[0] not in og_app_ids:
                     return_list.append(app)
         return self._convert_app_list_times(return_list)
-        
-        
+
+
     def return_day_list(self):
-        curr_day = datetime.now().strftime('%A').lower()
+        # Days are assumed to be stored as full names ("Tuesday"), matching
+        # what the reschedule tool passes in. Compared case-insensitively.
+        curr_day = datetime.now().strftime("%A").lower()
         return_list = []
         og_app_ids = []
-        with open('mock_temp_apps.csv', mode='r', encoding='utf-8') as file:
+        with open(self._path(TEMP_APPS_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
-                if len(app) < 8 or app[0] == 'temp_id':
-                    continue
-                if app[6] == '1' and app[7] == '0':
+                if self._is_active_temp(app) and app[3].lower() == curr_day:
+                    return_list.append(app)
                     og_app_ids.append(app[1])
-                    if app[3].lower() == curr_day:
-                        return_list.append(app)
-        with open('mock_schedule.csv', mode='r', encoding='utf-8') as file:
+        with open(self._path(SCHEDULE_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
-                if len(app) < 5 or app[0] == 'app_id':
-                    continue
-                if app[2].lower() == curr_day and app[0] not in og_app_ids:
+                # schedule rows are [app_id, student_id, day, start, end]
+                if len(app) > 2 and app[2].lower() == curr_day and app[0] not in og_app_ids:
                     return_list.append(app)
         return self._convert_app_list_times(return_list)
-        
-        
+
+
     #returns app or temp app for user
     def return_indie_app_list(self, person):
         return_list = []
         og_app_ids = []
-        with open('mock_temp_apps.csv', mode='r', encoding='utf-8') as file:
+        with open(self._path(TEMP_APPS_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
-                if app[2] == person[0] and app[6] == '1' and app[7] == '0':
+                if len(app) > 2 and app[2] == person[0] and self._is_active_temp(app):
                     return_list.append(app)
                     og_app_ids.append(app[1])
-        with open('mock_schedule.csv', mode='r', encoding='utf-8') as file:
+        with open(self._path(SCHEDULE_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
                 if app[1] == person[0] and app[0] not in og_app_ids:
                     return_list.append(app)
         return self._convert_app_list_times(return_list)
-    
+
     #--------------------------Reschedule Process-----------------------------
     #check for conflicts with standard schedule AND any existing temp appointments
     def process_reschedule(self, o_app_day, new_day, new_start, new_end):
         if not self._find_og_app(o_app_day):
             return f"The user's appointment on {o_app_day} was not found. Please clarify with the user."
-        
+
         conflict_check_result = self.check_conflicts(new_day, new_start, new_end)
         if conflict_check_result:
             return conflict_check_result
         return self.append_new_temp_app(new_day, new_start, new_end)
-            
-            
+
+
     def check_conflicts(self, new_day, new_start, new_end):
         og_app_id = self.og_app[0] if self.og_app else None
 
-        with open('mock_schedule.csv', mode='r', encoding='utf-8') as file:
+        with open(self._path(SCHEDULE_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
                 if app[0] == og_app_id:
                     continue
                 if app[2] == new_day and (app[3] < new_end and app[4] > new_start):
                     return f"conflict with standard appointment {app[0]}"
-        with open('mock_temp_apps.csv', mode='r', encoding='utf-8') as file:
+        with open(self._path(TEMP_APPS_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
                 if app[1] == og_app_id:
                     continue
                 if app[3] == new_day and (app[4] < new_end and app[5] > new_start):
                     return f"conflict with temporary appointment {app[0]}"
-        
-        
+        return None
+
+
     #append new temp reschedule
     def append_new_temp_app(self, new_day, new_start, new_end):
-        df = pd.read_csv('mock_temp_apps.csv')
-        if df.shape[0] == 0:
-            id = 0
-        else:
-            id = df.shape[0] + 1
+        df = pd.read_csv(self._path(TEMP_APPS_CSV))
+        id = self._next_id(df)
         new_temp_app = [id, self.og_app[0], self.user[0], new_day, new_start, new_end, 0, 0]
         print(f"new_temp_app: {new_temp_app}")
-        with open('mock_temp_apps.csv', mode='a', encoding='utf-8', newline='') as file:
+        with open(self._path(TEMP_APPS_CSV), mode='a', encoding='utf-8', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(new_temp_app)
-            
-        ap_start = self.convert_24_to_12h(new_start)
-        ap_end = self.convert_24_to_12h(new_end)
+
+        ap_start, ap_end = self.convert_24_to_12h(new_start, new_end)
         #will also return message for the tutor, requires second phone number though
         return f"Appointment for {self.og_app[0]} changed to {new_day}, {ap_start}-{ap_end}."
-    
+
     #approve or deny schedule request
     def approve_appointment(self, student_name, approval, temp_id=None):
         if not self.find_student(student_name):
             return f"student \'{student_name}\' not found in database. Make sure the student is registered in the database first."
 
-        if temp_id:
-            if self._find_temp_app(temp_id):
-                df = pd.read_csv('mock_temp_apps.csv')
-                df.loc[df['temp_id'] == int(temp_id), 'approval'] = approval
-                df.to_csv('mock_temp_apps.csv', index=False)
-                return f"temporary appointment {temp_id} {approval}"
-            else:
-                return f"temporary appointment {temp_id} not found"
-        else:
-            temp_app_list = self._find_temp_app()
+        if not temp_id:
+            temp_app_list = self._find_student_temp_apps()
+            if len(temp_app_list) == 0:
+                return f"no temporary appointment requests found for student '{student_name}'."
             if len(temp_app_list) > 1:
-                return_message = ("student has many temporary appointment requests. "
-                                  "Send this list back to the student and ask to clarify "
-                                  "with the temporary appointment's id number. "
-                                  f"\n{temp_app_list}")
-                return return_message
-            else:
-                df = pd.read_csv('mock_temp_apps.csv')
-                df.loc[df['temp_id'] == int(temp_app_list[0][0]), 'approval'] = approval
-                df.to_csv('mock_temp_apps.csv', index=False)
-                return f"temporary appointment {temp_id} {approval}"
-        
+                return ("student has many temporary appointment requests. "
+                        "Send this list back to the student and ask to clarify "
+                        "with the temporary appointment's id number. "
+                        f"\n{temp_app_list}")
+            temp_id = temp_app_list[0][0]
+
+        if not self._find_temp_app(temp_id):
+            return f"temporary appointment {temp_id} not found"
+
+        df = pd.read_csv(self._path(TEMP_APPS_CSV))
+        df.loc[df['temp_id'] == int(temp_id), 'approval'] = approval
+        df.to_csv(self._path(TEMP_APPS_CSV), index=False)
+        return f"temporary appointment {temp_id} {approval}"
+
 
     #-----------------------Adding new entries to database (Tutor Specific)----------------------------
     #Add new student to database
     def add_new_student(self, name, phone_num):
-        df = pd.read_csv('mock_people_database.csv')
-        if df.shape[0] == 0:
-            id = 0
-        else:
-            id = df.shape[0] + 1
+        df = pd.read_csv(self._path(PEOPLE_CSV))
+        id = self._next_id(df)
 
-        new_student = [id, name, phone_num]
-        with open('mock_people_database.csv', mode='a', encoding='utf-8', newline='') as file:
+        # Build the row using the column constants so it matches what
+        # find_user / find_student read. Unknown columns are left empty.
+        new_student = [""] * PEOPLE_NUM_COLS
+        new_student[PEOPLE_ID] = id
+        new_student[PEOPLE_PHONE] = phone_num
+        new_student[PEOPLE_NAME] = name
+        with open(self._path(PEOPLE_CSV), mode='a', encoding='utf-8', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(new_student)
         return f"New student {name} added."
@@ -276,19 +307,16 @@ class Database:
         if not self.find_student(student_name):
             return f"student \'{student_name}\' not found in database. Make sure the student is registered in the database first."
 
-        df = pd.read_csv('mock_schedule.csv')
-        if df.shape[0] == 0:
-            id = 0
-        else:
-            id = df.shape[0] + 1
+        df = pd.read_csv(self._path(SCHEDULE_CSV))
+        id = self._next_id(df)
         new_app = [id, self.student[0], day, start_time, end_time]
-        with open('mock_schedule.csv', mode='a', encoding='utf-8', newline='') as file:
+        with open(self._path(SCHEDULE_CSV), mode='a', encoding='utf-8', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(new_app)
-        
+
         ap_start, ap_end = self.convert_24_to_12h(start_time, end_time)
         return f"Appointment for {student_name} on {day}, {ap_start}-{ap_end} added."
-    
+
     #convert 24 hour time to am/pm time for the azure agent.
     def convert_24_to_12h(self, start_str, end_str):
         obj_start = datetime.strptime(start_str, "%H:%M")
