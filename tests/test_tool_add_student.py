@@ -10,8 +10,6 @@ class TestAddStudentSchema:
         assert {"name", "phone_number"} <= set(props)
         assert all(p["type"] == "string" for p in props.values())
 
-    @bug("'required' lists 'student_name' but the property is called 'name'; strict "
-         "schemas must have required == properties")
     def test_strict_schema(self, tools_by_name):
         assert_strict_schema(tools_by_name["add_student_arguments"])
 
