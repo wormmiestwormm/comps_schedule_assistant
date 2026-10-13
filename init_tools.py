@@ -1,6 +1,10 @@
 """
 Tool schemas and agent instructions shared between the one-time agent setup
-script (init_agents.py) and the runtime orchestration code (foundry_model.py).
+script (init_agents.py) and the runtime orchestration code (foundry_module.py).
+
+IMPORTANT: every parameter name below must match the argument names of the Database method
+the tool is dispatched to (see TOOL_METHODS in foundry_module.py). Run `python eval/check_tools.py`
+after editing to verify.
 """
 
 from azure.ai.projects.models import Tool, FunctionTool
@@ -33,14 +37,14 @@ def build_tools():
             "properties": {
                 "name": {
                         "type": "string",
-                        "description": "The full name of the name of the student that the tutor wants to add."
+                        "description": "The full name of the student that the tutor wants to add."
                 },
-                "phone_number": {
+                "phone_num": {
                     "type": "string",
                     "description": "The phone number of the student."
                 }
             },
-            "required": ["student_name", "phone_number"],
+            "required": ["name", "phone_num"],
             "additionalProperties": False
         },
         description="Gather the new student's full name and phone number to add to the database.",
@@ -53,9 +57,9 @@ def build_tools():
             "properties": {
                 "student_name": {
                         "type": "string",
-                        "description": "The first or full name of the name of the student that the tutor wants to add."
+                        "description": "The first or full name of the student that the appointment is for."
                 },
-                "app_day": {
+                "day": {
                     "type": "string",
                     "description": "the day the appointment is scheduled for. Must be lowercase."
                 },
@@ -68,7 +72,7 @@ def build_tools():
                     "description": "the ending time of the appointment. Structured \'HH:MM\'. Example: \'10:00\', \'15:00\'"
                 }
             },
-            "required": ["student_name", "app_day", "start_time", "end_time"],
+            "required": ["student_name", "day", "start_time", "end_time"],
             "additionalProperties": False
         },
         description="For a new appointment to be added, gathers the student's name, the appointment day, the start time, and end time.",
@@ -79,24 +83,24 @@ def build_tools():
         parameters={
             "type": "object",
             "properties": {
-                "original_appointment_day": {
+                "o_app_day": {
                     "type": "string",
                     "description": "the day the original appointment was scheduled for. Must be lowercase."
                 },
-                "new_appointment_day": {
+                "new_day": {
                     "type": "string",
                     "description": "the day the user wants to reschedule to. Usually comes after the original appointment day is mentioned. Must be lowercase."
                 },
-                "start_time": {
+                "new_start": {
                     "type": "string",
                     "description": "the starting time of the new appointment. Structured \'HH:MM\'. Example: \'10:00\', \'15:00\'"
                 },
-                "end_time": {
+                "new_end": {
                     "type": "string",
-                    "description": "the ending time of the new appointment. If not mentioned, recomfirm with the user what end time they would want. Structured \'HH:MM\'. Example: \'10:00\', \'15:00\'"
+                    "description": "the ending time of the new appointment. If not mentioned, reconfirm with the user what end time they would want. Structured \'HH:MM\'. Example: \'10:00\', \'15:00\'"
                 }
             },
-            "required": ["original_appointment_day", "new_appointment_day", "start_time", "end_time"],
+            "required": ["o_app_day", "new_day", "new_start", "new_end"],
             "additionalProperties": False
         },
         description="Gather necessary information to add a temporary rescheduled appointment to the database. gathers the original appointment day, the new rescheduled day, the new start-time, and new end-time.",
@@ -109,11 +113,11 @@ def build_tools():
             "properties": {
                 "student_name": {
                     "type": "string",
-                    "description": "the day the original appointment was scheduled for."
+                    "description": "The first or full name of the student whose reschedule request is being approved or denied."
                  },
                  "approval": {
                     "type": "boolean",
-                    "description": "The tutor's approval or dissapproval of the temporary rescheduling. approved = True, denied = False"
+                    "description": "The tutor's approval or disapproval of the temporary rescheduling. approved = True, denied = False"
                 },
                 "temp_id": {
                     "type": ["integer", "null"],

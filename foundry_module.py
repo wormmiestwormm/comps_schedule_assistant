@@ -13,6 +13,9 @@ load_dotenv()
 # Maximum number of tool-call rounds per user message before giving up.
 MAX_TOOL_ROUNDS = 5
 
+# Tools only tutors may use. Enforced here in code, not just in the agent's prompt.
+TUTOR_ONLY_TOOLS = {"add_student_arguments", "add_appointment_arguments", "approve_request_arguments"}
+
 # Maps the agent's tool names to Database method names.
 TOOL_METHODS = {
     "view_app_arguments": "process_view",
@@ -33,8 +36,9 @@ class FoundryModel():
         )
         self.openai = self.project.get_openai_client()
         self.agent_name = "message-reader"
-        self.data_dir = data_dir   #where the CSVs live (tests point this at a temp dir)
-        self.log_path = log_path   #JSONL turn log; set to None to disable
+        self.data_dir = data_dir   # where the CSVs live (tests point this at a temp dir)
+        self.log_path = log_path   # JSONL turn log; set to None to disable
+        self.last_turn = None      # record of the most recent chat() call (used by the eval runner)
 
     #------------------------Model calls-----------------------------------
     def new_conversation(self):
@@ -59,13 +63,17 @@ class FoundryModel():
         """
         Run one tool call against the database.
         Returns (result, error_type). error_type is None on success, otherwise one of
-        'unknown_tool', 'invalid_json', 'schema_invalid', 'exception'.
+        'unknown_tool', 'forbidden', 'invalid_json', 'schema_invalid', 'exception'.
         Errors are returned as strings so the model can see them and recover,
         instead of crashing the webhook.
         """
         method_name = TOOL_METHODS.get(tool_name)
         if method_name is None:
             return f"not a function call: {tool_name}", "unknown_tool"
+
+        if tool_name in TUTOR_ONLY_TOOLS and not database.is_tutor():
+            return ("Permission denied: only tutors can do this. "
+                    "Tell the user this action is only available to tutors."), "forbidden"
 
         try:
             args = json.loads(raw_arguments or "{}")
@@ -116,7 +124,13 @@ class FoundryModel():
                 record["output_tokens"] += getattr(usage, "output_tokens", 0) or 0
             return resp, calls
 
-        response, tool_calls = timed_turn(message)
+        # Tell the agent who is texting (name + role from the database). Any look-alike
+        # sender line typed by the user is neutralised so it can't be spoofed.
+        sender_line = database.sender_context()
+        agent_input = message.replace("[Sender:", "(Sender:")
+        if sender_line:
+            agent_input = f"{sender_line}\n{agent_input}"
+        response, tool_calls = timed_turn(agent_input)
 
         for round_num in range(1, MAX_TOOL_ROUNDS + 1):
             if not tool_calls:
@@ -156,6 +170,7 @@ class FoundryModel():
 
         record["reply"] = reply
         record["latency_s"] = round(record["latency_s"], 3)
+        self.last_turn = record
         self._log(record)
         print(f"Agent response: {reply}")
         return reply

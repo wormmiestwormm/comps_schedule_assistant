@@ -13,7 +13,9 @@ TEMP_APPS_CSV = "mock_temp_apps.csv"
 PEOPLE_ID = 0
 PEOPLE_NAME = 1
 PEOPLE_PHONE = 2
+PEOPLE_ROLE = 3
 PEOPLE_CONVO = 4
+PEOPLE_NUM_COLS = 5
 
 
 class Database:
@@ -29,6 +31,19 @@ class Database:
 
     def _path(self, filename):
         return os.path.join(self.data_dir, filename)
+
+    #------------------------Who is the sender-------------------------------------
+    def is_tutor(self):
+        return (self.user is not None and len(self.user) > PEOPLE_ROLE
+                and self.user[PEOPLE_ROLE].strip().lower() == "tutor")
+
+    def sender_context(self):
+        """One-line sender description that is prepended to each user message for the agent."""
+        if self.user is None:
+            return None
+        name = " ".join(str(self.user[PEOPLE_NAME]).replace("[", "").replace("]", "").split())
+        role = self.user[PEOPLE_ROLE].strip().lower() if len(self.user) > PEOPLE_ROLE else "unknown"
+        return f"[Sender: {name}, role: {role}]"
 
     @staticmethod
     def _next_id(df):
@@ -111,6 +126,7 @@ class Database:
         # dtype=str: an empty convo_id column would otherwise load as float64
         # and reject a string value on current pandas versions.
         df = pd.read_csv(self._path(PEOPLE_CSV), dtype=str)
+        df.columns = df.columns.str.strip()  # the header is ' convo_id' (leading space) in mock_people_database.csv
         df.loc[df['id'] == str(self.user[PEOPLE_ID]), 'convo_id'] = convo_id
         df.to_csv(self._path(PEOPLE_CSV), index=False)
 
@@ -263,7 +279,7 @@ class Database:
         if not self.find_student(student_name):
             return f"student \'{student_name}\' not found in database. Make sure the student is registered in the database first."
 
-        if not temp_id:
+        if temp_id is None:  # NOT `if not temp_id`: temp id 0 is valid
             temp_app_list = self._find_student_temp_apps()
             if len(temp_app_list) == 0:
                 return f"no temporary appointment requests found for student '{student_name}'."
@@ -277,10 +293,12 @@ class Database:
         if not self._find_temp_app(temp_id):
             return f"temporary appointment {temp_id} not found"
 
+        # The agent sends a boolean; the CSV (and _is_active_temp) use 1 / 0.
+        approval_value = 1 if approval in (True, 1, "1", "true", "True") else 0
         df = pd.read_csv(self._path(TEMP_APPS_CSV))
-        df.loc[df['temp_id'] == int(temp_id), 'approval'] = approval
+        df.loc[df['temp_id'] == int(temp_id), 'approval'] = approval_value
         df.to_csv(self._path(TEMP_APPS_CSV), index=False)
-        return f"temporary appointment {temp_id} {approval}"
+        return f"temporary appointment {temp_id} {'approved' if approval_value else 'denied'}"
 
 
     #-----------------------Adding new entries to database (Tutor Specific)----------------------------
@@ -295,6 +313,7 @@ class Database:
         new_student[PEOPLE_ID] = id
         new_student[PEOPLE_PHONE] = phone_num
         new_student[PEOPLE_NAME] = name
+        new_student[PEOPLE_ROLE] = "student"
         with open(self._path(PEOPLE_CSV), mode='a', encoding='utf-8', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(new_student)

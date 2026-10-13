@@ -81,8 +81,8 @@ module = SinchModule()
 app.add_url_rule("/webhook", "webhook", module.webhook, methods=["POST"])
 if __name__ == "__main__":
     module = SinchModule()
-    app.run(host="0.0.0.0", port=5000)
-    #module.main("Hello, can I see an appointment?", "+13104069080")
+    #app.run(host="0.0.0.0", port=5000)
+    module.main("Hello, can I see an appointment?", "+13104069080")
     #print("hello!")
     
     #reschedule 1 14:00 15:00
