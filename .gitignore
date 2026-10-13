@@ -1,2 +1,6 @@
 .env
 __pycache__
+eval
+mock_people_database.csv
+mock_schedule.csv
+mock_temp_apps.csv
