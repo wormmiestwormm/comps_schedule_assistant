@@ -23,6 +23,9 @@ TOOL_METHODS = {
     "add_appointment_arguments": "add_new_app",
     "add_reschedule_request_arguments": "process_reschedule",
     "approve_request_arguments": "approve_appointment",
+    "cancel_appointment_arguments": "cancel_appointment",
+    "cancel_reschedule_arguments": "cancel_reschedule_request",
+    "remove_appointment_arguments": "remove_appointment"
 }
 
 

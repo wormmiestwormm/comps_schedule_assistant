@@ -97,6 +97,17 @@ class Database:
                     return True
         print(f"original appointment on {ap_day} not found")
         return False
+    
+    def _find_og_app_with_id(self, ap_id):
+        with open(self._path(SCHEDULE_CSV), mode='r', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            for app in reader:
+                if app[1] == self.student[0] and app[0] == ap_id:
+                    self.og_app = app
+                    print(f"original appointment on {ap_id} found")
+                    return True
+        print(f"original appointment on {ap_id} not found")
+        return False
 
     #verify that temporary appointment exists
     def _find_temp_app(self, temp_id):
@@ -109,6 +120,7 @@ class Database:
                     return True
         print(f"temporary appointment {temp_id} not found")
         return False
+    
 
     #all temporary appointments belonging to the currently selected student
     def _find_student_temp_apps(self):
@@ -151,7 +163,7 @@ class Database:
     @staticmethod
     def _is_active_temp(app):
         # csv.reader yields strings, so compare against "1" / "0", not ints.
-        return len(app) > 7 and str(app[6]) == "1" and str(app[7]) == "0"
+        return len(app) > 7 and str(app[6]) == "1" and str(app[7]) == "0" and app[1] != "canceled"
 
     def process_view(self, specificity=1, student_name=None):
         print("process_view accessed")
@@ -179,7 +191,9 @@ class Database:
         with open(self._path(TEMP_APPS_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
-                if self._is_active_temp(app):
+                if app[3] == "canceled" and str(app[7]) == "0":
+                    og_app_ids.append(app[1])
+                elif self._is_active_temp(app):
                     return_list.append(app)
                     og_app_ids.append(app[1])
         with open(self._path(SCHEDULE_CSV), mode='r', encoding='utf-8') as file:
@@ -199,7 +213,9 @@ class Database:
         with open(self._path(TEMP_APPS_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
-                if self._is_active_temp(app) and app[3].lower() == curr_day:
+                if app[3] == "canceled" and str(app[7]) == "0":
+                    og_app_ids.append(app[1])
+                elif self._is_active_temp(app) and app[3].lower() == curr_day:
                     return_list.append(app)
                     og_app_ids.append(app[1])
         with open(self._path(SCHEDULE_CSV), mode='r', encoding='utf-8') as file:
@@ -218,13 +234,25 @@ class Database:
         with open(self._path(TEMP_APPS_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
-                if len(app) > 2 and app[2] == person[0] and self._is_active_temp(app):
+                if app[3] == "canceled" and str(app[7]) == "0":
+                    og_app_ids.append(app[1])
+                elif len(app) > 2 and app[2] == person[0] and self._is_active_temp(app):
                     return_list.append(app)
                     og_app_ids.append(app[1])
         with open(self._path(SCHEDULE_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
                 if app[1] == person[0] and app[0] not in og_app_ids:
+                    return_list.append(app)
+        return self._convert_app_list_times(return_list)
+    
+    #returns app or temp app for user
+    def return_student_app_list(self):
+        return_list = []
+        with open(self._path(SCHEDULE_CSV), mode='r', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            for app in reader:
+                if app[1] == self.student[0]:
                     return_list.append(app)
         return self._convert_app_list_times(return_list)
 
@@ -273,6 +301,68 @@ class Database:
         ap_start, ap_end = self.convert_24_to_12h(new_start, new_end)
         #will also return message for the tutor, requires second phone number though
         return f"Appointment for {self.og_app[0]} changed to {new_day}, {ap_start}-{ap_end}."
+    
+    def append_temp_cancel(self):
+            df = pd.read_csv(self._path(TEMP_APPS_CSV))
+            id = self._next_id(df)
+            new_temp_app = [id, self.og_app[0], self.user[0], "cancel", "00:00", "00:00", 1, 0]
+            print(f"(canceled app) new_temp_app: {new_temp_app}")
+            with open(self._path(TEMP_APPS_CSV), mode='a', encoding='utf-8', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(new_temp_app)
+    
+    def cancel_appointment(self, student_name, day):
+        if not self.find_student(student_name):
+            return f"student \'{student_name}\' not found in database. Make sure the student is registered in the database first."
+        
+        if not self._find_og_app(day):
+            return f"The user's appointment on {day} was not found. Please clarify with the user."
+        
+        self.append_temp_cancel()
+        return f"appointment on {day} successfully canceled temporarily."
+    
+    
+    def cancel_reschedule_request(self, student_name, temp_id=None):
+        if not self.find_student(student_name):
+            return f"student \'{student_name}\' not found in database. Make sure the student is registered in the database first."
+            
+        if temp_id is None:
+            temp_app_list = self._find_student_temp_apps()
+            if len(temp_app_list) == 0:
+                return f"no temporary appointment requests found for student '{student_name}'."
+            if len(temp_app_list) > 1:
+                return ("student has many temporary appointment requests. "
+                        "Send this list back to the student and ask to clarify "
+                        "with the temporary appointment's id number. "
+                        f"\n{temp_app_list}")
+            temp_id = temp_app_list[0][0]
+        if not self._find_temp_app(temp_id):
+            return f"temporary appointment {temp_id} not found"
+        
+        df = pd.read_csv(TEMP_APPS_CSV)
+        df = df[df["temp_id"] != temp_id]
+        df.to_csv(TEMP_APPS_CSV, index=False)
+        return "temporary appointment removed."
+
+
+    def remove_appointment(self, student_name, day, app_id=None):
+        if not self.find_student(student_name):
+            return f"student \'{student_name}\' not found in database. Make sure the student is registered in the database first."
+        if app_id is None:
+            if self._find_og_app(day):
+                app_list = self.return_indie_app_list(student_name)
+                return ("student appointment was not found. "
+                        "Send this list back to the tutor and ask to clarify "
+                        "which appointment day and appointment ID they want to remove."
+                        f"\n{app_list}")
+        elif not self._find_og_app_with_id(app_id):
+                return f"appointment {app_id} not found."
+        
+        df = pd.read_csv(SCHEDULE_CSV)
+        df = df[df["app_id"] != self.og_app[0]]
+        df.to_csv(SCHEDULE_CSV, index=False)
+        return "temporary appointment removed."
+     
 
     #approve or deny schedule request
     def approve_appointment(self, student_name, approval, temp_id=None):

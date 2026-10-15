@@ -114,8 +114,8 @@ def build_tools():
                 "student_name": {
                     "type": "string",
                     "description": "The first or full name of the student whose reschedule request is being approved or denied."
-                 },
-                 "approval": {
+                },
+                "approval": {
                     "type": "boolean",
                     "description": "The tutor's approval or disapproval of the temporary rescheduling. approved = True, denied = False"
                 },
@@ -130,6 +130,73 @@ def build_tools():
         description="Gather information necessary to approve the rescheduling of an appointment. Gather the student name, approval, and, only if needed, the temp_id",
         strict=True
     )
+    cancel_appointment_arguments = FunctionTool(
+        name="cancel_appointment_arguments",
+        parameters={
+            "type": "object",
+            "properties": {
+                "student_name": {
+                    "type": "string",
+                    "description": "The first or full name of the student whose reschedule request is being approved or denied."
+                },
+                "day": {
+                    "type": "string",
+                    "description": "the day the appointment was scheduled for. Must be lowercase."
+                },
+            },
+            "required": ["student_name", "day", "temp_id"],
+            "additionalProperties": False
+        },
+        description="Gather information necessary to mark a regular appointment as canceled temporarily. Gather the student name and appointment day. DO NOT use this for permenant appointment removals",
+        strict=True
+    )
     
-    tools = [view_app_arguments, add_student_arguments, add_app_arguments, add_reschedule_request_arguments, approve_request_arguments]
+    cancel_reschedule_arguments = FunctionTool(
+        name="cancel_reschedule_arguments",
+        parameters={
+            "type": "object",
+            "properties": {
+                "student_name": {
+                    "type": "string",
+                    "description": "The first or full name of the student whose reschedule request is being approved or denied."
+                },
+                "temp_id": {
+                    "type": ["integer", "null"],
+                    "description": "the id number of the rescheduled appointment. Not necessary initially. Only fill this argument in when the student name is not enough to find the temporary appointment."
+                }
+            },
+            "required": ["student_name", "temp_id"],
+            "additionalProperties": False
+        },
+        description="Gather information necessary to cancel a rescheduled appointment request. Gather the student name and, only if needed, the temp_id",
+        strict=True
+    )
+    
+    remove_appointment_arguments = FunctionTool(
+        name="remove_appointment_arguments",
+        parameters={
+            "type": "object",
+            "properties": {
+                "student_name": {
+                    "type": "string",
+                    "description": "The first or full name of the student whose reschedule request is being approved or denied."
+                },
+                "day": {
+                    "type": "string",
+                    "description": "the day the appointment was scheduled for. Must be lowercase."
+                },
+                "app_id": {
+                    "type": ["integer", "null"],
+                    "description": "the id number of the appointment. Not necessary initially. Only fill this argument in when the student name is not enough to find the appointment."
+                }
+            },
+            "required": ["student_name", "temp_id"],
+            "additionalProperties": False
+        },
+        description="Gather information necessary to cancel a rescheduled appointment request. Gather the student name and, only if needed, the temp_id",
+        strict=True
+    )
+    
+    
+    tools = [view_app_arguments, add_student_arguments, add_app_arguments, add_reschedule_request_arguments, approve_request_arguments, cancel_appointment_arguments, cancel_reschedule_arguments]
     return tools
