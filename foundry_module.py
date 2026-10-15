@@ -14,7 +14,20 @@ load_dotenv()
 MAX_TOOL_ROUNDS = 5
 
 # Tools only tutors may use. Enforced here in code, not just in the agent's prompt.
-TUTOR_ONLY_TOOLS = {"add_student_arguments", "add_appointment_arguments", "approve_request_arguments"}
+TUTOR_ONLY_TOOLS = {
+    "add_student_arguments",
+    "add_appointment_arguments",
+    "approve_request_arguments",
+    "remove_appointment_arguments",      # permanent removal
+}
+
+# Tools that take a `student_name`, which students may only point at THEMSELVES.
+# Tutors may name any student. (Reschedule requests need no check: that method only ever
+# acts on the sender's own appointments.)
+STUDENT_SELF_ONLY_TOOLS = {
+    "cancel_appointment_arguments",
+    "cancel_reschedule_arguments",
+}
 
 # Maps the agent's tool names to Database method names.
 TOOL_METHODS = {
@@ -25,7 +38,7 @@ TOOL_METHODS = {
     "approve_request_arguments": "approve_appointment",
     "cancel_appointment_arguments": "cancel_appointment",
     "cancel_reschedule_arguments": "cancel_reschedule_request",
-    "remove_appointment_arguments": "remove_appointment"
+    "remove_appointment_arguments": "remove_appointment",
 }
 
 
@@ -82,6 +95,14 @@ class FoundryModel():
             args = json.loads(raw_arguments or "{}")
         except json.JSONDecodeError as e:
             return f"Tool arguments were not valid JSON: {e}", "invalid_json"
+
+        # Students may only cancel their own appointments / requests. Resolve the name exactly the
+        # way the Database method will (find_student), so the check and the action always agree.
+        if tool_name in STUDENT_SELF_ONLY_TOOLS and not database.is_tutor():
+            name = args.get("student_name") if isinstance(args, dict) else None
+            if not name or not database.find_student(name) or database.student[0] != database.user[0]:
+                return ("Permission denied: students can only do this for their own appointments. "
+                        "Tell the user they can only change their own appointments."), "forbidden"
 
         method = getattr(database, method_name)
         try:

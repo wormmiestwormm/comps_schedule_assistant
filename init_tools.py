@@ -137,20 +137,20 @@ def build_tools():
             "properties": {
                 "student_name": {
                     "type": "string",
-                    "description": "The first or full name of the student whose reschedule request is being approved or denied."
+                    "description": "The first or full name of the student whose appointment is being canceled."
                 },
                 "day": {
                     "type": "string",
                     "description": "the day the appointment was scheduled for. Must be lowercase."
                 },
             },
-            "required": ["student_name", "day", "temp_id"],
+            "required": ["student_name", "day"],
             "additionalProperties": False
         },
-        description="Gather information necessary to mark a regular appointment as canceled temporarily. Gather the student name and appointment day. DO NOT use this for permenant appointment removals",
+        description="Gather information necessary to mark a regular appointment as canceled temporarily (that one occurrence only). Gather the student name and appointment day. DO NOT use this for permanent appointment removals.",
         strict=True
     )
-    
+
     cancel_reschedule_arguments = FunctionTool(
         name="cancel_reschedule_arguments",
         parameters={
@@ -158,11 +158,11 @@ def build_tools():
             "properties": {
                 "student_name": {
                     "type": "string",
-                    "description": "The first or full name of the student whose reschedule request is being approved or denied."
+                    "description": "The first or full name of the student whose reschedule request is being canceled."
                 },
                 "temp_id": {
                     "type": ["integer", "null"],
-                    "description": "the id number of the rescheduled appointment. Not necessary initially. Only fill this argument in when the student name is not enough to find the temporary appointment."
+                    "description": "the id number of the rescheduled appointment. Not necessary initially. Only fill this argument in when the student name is not enough to find the temporary appointment, otherwise leave as null."
                 }
             },
             "required": ["student_name", "temp_id"],
@@ -171,7 +171,7 @@ def build_tools():
         description="Gather information necessary to cancel a rescheduled appointment request. Gather the student name and, only if needed, the temp_id",
         strict=True
     )
-    
+
     remove_appointment_arguments = FunctionTool(
         name="remove_appointment_arguments",
         parameters={
@@ -179,7 +179,7 @@ def build_tools():
             "properties": {
                 "student_name": {
                     "type": "string",
-                    "description": "The first or full name of the student whose reschedule request is being approved or denied."
+                    "description": "The first or full name of the student whose appointment is being permanently removed."
                 },
                 "day": {
                     "type": "string",
@@ -187,16 +187,16 @@ def build_tools():
                 },
                 "app_id": {
                     "type": ["integer", "null"],
-                    "description": "the id number of the appointment. Not necessary initially. Only fill this argument in when the student name is not enough to find the appointment."
+                    "description": "the id number of the appointment. Not necessary initially. Only fill this argument in when the student name and day are not enough to find the appointment, otherwise leave as null."
                 }
             },
-            "required": ["student_name", "temp_id"],
+            "required": ["student_name", "day", "app_id"],
             "additionalProperties": False
         },
-        description="Gather information necessary to cancel a rescheduled appointment request. Gather the student name and, only if needed, the temp_id",
+        description="Tutor only. Gather information necessary to PERMANENTLY remove a regular appointment from the schedule. Gather the student name, the appointment day and, only if needed, the app_id. DO NOT use this for one-time cancellations.",
         strict=True
     )
-    
-    
-    tools = [view_app_arguments, add_student_arguments, add_app_arguments, add_reschedule_request_arguments, approve_request_arguments, cancel_appointment_arguments, cancel_reschedule_arguments]
+
+    tools = [view_app_arguments, add_student_arguments, add_app_arguments, add_reschedule_request_arguments, approve_request_arguments,
+             cancel_appointment_arguments, cancel_reschedule_arguments, remove_appointment_arguments]
     return tools

@@ -86,41 +86,48 @@ class Database:
         print(f"student {name} not found")
         return False
 
-    #verify that original appointment exists
-    def _find_og_app(self, ap_day):
+    #verify that original appointment exists (the sender's own by default, or a given student's)
+    def _find_og_app(self, ap_day, student_id=None):
+        sid = str(student_id if student_id is not None else self.user[0])
         with open(self._path(SCHEDULE_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
-                if app[1] == self.user[0] and app[2] == ap_day:
+                if app[1] == sid and app[2] == ap_day:
                     self.og_app = app
                     print(f"original appointment on {ap_day} found")
                     return True
         print(f"original appointment on {ap_day} not found")
         return False
-    
+
+    #find the selected student's appointment by id. Ids arrive from the model as ints
+    #but are strings in the CSV, so compare as strings.
     def _find_og_app_with_id(self, ap_id):
         with open(self._path(SCHEDULE_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
-                if app[1] == self.student[0] and app[0] == ap_id:
+                if app[1] == str(self.student[0]) and app[0] == str(ap_id):
                     self.og_app = app
-                    print(f"original appointment on {ap_id} found")
+                    print(f"original appointment {ap_id} found")
                     return True
-        print(f"original appointment on {ap_id} not found")
+        print(f"original appointment {ap_id} not found")
         return False
 
-    #verify that temporary appointment exists
-    def _find_temp_app(self, temp_id):
+    #verify that temporary appointment exists (and, if student_id is given, that it belongs to that student)
+    def _find_temp_app(self, temp_id, student_id=None):
         with open(self._path(TEMP_APPS_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
-                if app[0] == str(temp_id):
+                if app[0] == str(temp_id) and (student_id is None or app[2] == str(student_id)):
                     self.temp_app = app
                     print(f"temporary appointment {temp_id} found")
                     return True
         print(f"temporary appointment {temp_id} not found")
         return False
-    
+
+    #defence in depth: foundry_module.dispatch already blocks this, but the database layer should
+    #never let a student act on somebody else's records even if it is called directly.
+    def _acting_on_other_student(self):
+        return (not self.is_tutor()) and self.student is not None and self.student[0] != self.user[0]
 
     #all temporary appointments belonging to the currently selected student
     def _find_student_temp_apps(self):
@@ -303,29 +310,45 @@ class Database:
         return f"Appointment for {self.og_app[0]} changed to {new_day}, {ap_start}-{ap_end}."
     
     def append_temp_cancel(self):
-            df = pd.read_csv(self._path(TEMP_APPS_CSV))
-            id = self._next_id(df)
-            new_temp_app = [id, self.og_app[0], self.user[0], "cancel", "00:00", "00:00", 1, 0]
-            print(f"(canceled app) new_temp_app: {new_temp_app}")
-            with open(self._path(TEMP_APPS_CSV), mode='a', encoding='utf-8', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow(new_temp_app)
-    
+        df = pd.read_csv(self._path(TEMP_APPS_CSV))
+        id = self._next_id(df)
+        #student_id is the appointment's owner (og_app[1]), which is not always the sender:
+        #a tutor can cancel on behalf of a student.
+        new_temp_app = [id, self.og_app[0], self.og_app[1], "cancel", "00:00", "00:00", 1, 0]
+        print(f"(canceled app) new_temp_app: {new_temp_app}")
+        with open(self._path(TEMP_APPS_CSV), mode='a', encoding='utf-8', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(new_temp_app)
+
+    def _is_already_canceled(self, app_id):
+        with open(self._path(TEMP_APPS_CSV), mode='r', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            for app in reader:
+                if self._is_active_temp(app) and app[1] == str(app_id) and app[3] == "cancel":
+                    return True
+        return False
+
     def cancel_appointment(self, student_name, day):
         if not self.find_student(student_name):
             return f"student \'{student_name}\' not found in database. Make sure the student is registered in the database first."
-        
-        if not self._find_og_app(day):
-            return f"The user's appointment on {day} was not found. Please clarify with the user."
-        
+        if self._acting_on_other_student():
+            return "Permission denied: students can only cancel their own appointments."
+
+        if not self._find_og_app(day, self.student[0]):
+            return f"{student_name}'s appointment on {day} was not found. Please clarify with the user."
+        if self._is_already_canceled(self.og_app[0]):
+            return f"The appointment on {day} is already canceled."
+
         self.append_temp_cancel()
         return f"appointment on {day} successfully canceled temporarily."
-    
-    
+
+
     def cancel_reschedule_request(self, student_name, temp_id=None):
         if not self.find_student(student_name):
             return f"student \'{student_name}\' not found in database. Make sure the student is registered in the database first."
-            
+        if self._acting_on_other_student():
+            return "Permission denied: students can only cancel their own requests."
+
         if temp_id is None:
             temp_app_list = self._find_student_temp_apps()
             if len(temp_app_list) == 0:
@@ -336,36 +359,50 @@ class Database:
                         "with the temporary appointment's id number. "
                         f"\n{temp_app_list}")
             temp_id = temp_app_list[0][0]
-        if not self._find_temp_app(temp_id):
-            return f"temporary appointment {temp_id} not found"
-        
-        df = pd.read_csv(TEMP_APPS_CSV)
-        df = df[df["temp_id"] != temp_id]
-        df.to_csv(TEMP_APPS_CSV, index=False)
-        return "temporary appointment removed."
+        #the id must belong to this student, so nobody can remove another student's request by id
+        if not self._find_temp_app(temp_id, self.student[0]):
+            return f"temporary appointment {temp_id} not found for {student_name}."
+
+        #read as strings: the id may be an int (from the model) or a str (from the lookup above)
+        df = pd.read_csv(self._path(TEMP_APPS_CSV), dtype=str)
+        remaining = df[df["temp_id"] != str(temp_id)]
+        if len(remaining) == len(df):
+            return f"temporary appointment {temp_id} could not be removed."
+        remaining.to_csv(self._path(TEMP_APPS_CSV), index=False)
+        return f"temporary appointment {temp_id} removed."
 
 
     def remove_appointment(self, student_name, day, app_id=None):
+        if not self.is_tutor():
+            return "Permission denied: only tutors can permanently remove appointments."
         if not self.find_student(student_name):
             return f"student \'{student_name}\' not found in database. Make sure the student is registered in the database first."
+
         if app_id is None:
-            if self._find_og_app(day):
-                app_list = self.return_indie_app_list(student_name)
-                return ("student appointment was not found. "
+            if not self._find_og_app(day, self.student[0]):
+                app_list = self.return_student_app_list()
+                return (f"{student_name}'s appointment on {day} was not found. "
                         "Send this list back to the tutor and ask to clarify "
                         "which appointment day and appointment ID they want to remove."
                         f"\n{app_list}")
         elif not self._find_og_app_with_id(app_id):
-                return f"appointment {app_id} not found."
-        
-        df = pd.read_csv(SCHEDULE_CSV)
-        df = df[df["app_id"] != self.og_app[0]]
-        df.to_csv(SCHEDULE_CSV, index=False)
-        return "temporary appointment removed."
-     
+            return f"appointment {app_id} not found for {student_name}."
+
+        removed_id = str(self.og_app[0])
+        sched = pd.read_csv(self._path(SCHEDULE_CSV), dtype=str)
+        sched[sched["app_id"] != removed_id].to_csv(self._path(SCHEDULE_CSV), index=False)
+
+        #also drop temp rows (reschedule requests / cancellations) that pointed at the removed
+        #appointment, otherwise they would linger as orphans and still show up in schedule views
+        temp = pd.read_csv(self._path(TEMP_APPS_CSV), dtype=str)
+        temp[temp["app_id"] != removed_id].to_csv(self._path(TEMP_APPS_CSV), index=False)
+        return f"appointment {removed_id} for {student_name} on {self.og_app[2]} permanently removed."
+
 
     #approve or deny schedule request
     def approve_appointment(self, student_name, approval, temp_id=None):
+        if not self.is_tutor():
+            return "Permission denied: only tutors can approve or deny requests."
         if not self.find_student(student_name):
             return f"student \'{student_name}\' not found in database. Make sure the student is registered in the database first."
 
@@ -380,8 +417,8 @@ class Database:
                         f"\n{temp_app_list}")
             temp_id = temp_app_list[0][0]
 
-        if not self._find_temp_app(temp_id):
-            return f"temporary appointment {temp_id} not found"
+        if not self._find_temp_app(temp_id, self.student[0]):
+            return f"temporary appointment {temp_id} not found for {student_name}."
 
         # The agent sends a boolean; the CSV (and _is_active_temp) use 1 / 0.
         approval_value = 1 if approval in (True, 1, "1", "true", "True") else 0
