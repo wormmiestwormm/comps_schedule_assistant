@@ -43,7 +43,14 @@ TOOL_METHODS = {
 
 
 class FoundryModel():
-    def __init__(self, data_dir=".", log_path="turn_log.jsonl"):
+    def __init__(self, data_dir=".", log_path="turn_log.jsonl", notifier=None, add_context=None):
+        """
+        notifier:    callable(text, phone) that sends an SMS (SinchModule passes its send_text).
+                     None (the default) means nothing is ever sent, which is what tests want.
+        add_context: also append each notification to the recipient's Foundry conversation, so the
+                     agent understands their reply ("yes, approve it"). Defaults to True only when a
+                     notifier is set, so tests don't create stray Foundry conversations.
+        """
         endpoint = os.environ.get("FOUNDRYPROJECTENDPOINT")
         # retrieve azure foundry project
         self.project = AIProjectClient(
@@ -55,10 +62,19 @@ class FoundryModel():
         self.data_dir = data_dir   # where the CSVs live (tests point this at a temp dir)
         self.log_path = log_path   # JSONL turn log; set to None to disable
         self.last_turn = None      # record of the most recent chat() call (used by the eval runner)
+        self.notifier = notifier
+        self.add_context = (notifier is not None) if add_context is None else add_context
 
     #------------------------Model calls-----------------------------------
     def new_conversation(self):
         return self.openai.conversations.create().id
+
+    def add_assistant_message(self, convo_id, text):
+        """Append a message to a conversation as if the assistant had said it."""
+        self.openai.conversations.items.create(
+            convo_id,
+            items=[{"type": "message", "role": "assistant", "content": text}],
+        )
 
     def run_turn(self, input_, convo_id):
         """One call to the agent. Returns (response, tool_calls)."""
@@ -135,6 +151,7 @@ class FoundryModel():
             "input_tokens": 0,
             "output_tokens": 0,
             "hit_round_cap": False,
+            "notifications": [],
         }
 
         def timed_turn(input_):
@@ -148,49 +165,55 @@ class FoundryModel():
                 record["output_tokens"] += getattr(usage, "output_tokens", 0) or 0
             return resp, calls
 
-        # Tell the agent who is texting (name + role from the database). Any look-alike
-        # sender line typed by the user is neutralised so it can't be spoofed.
-        sender_line = database.sender_context()
-        agent_input = message.replace("[Sender:", "(Sender:")
-        if sender_line:
-            agent_input = f"{sender_line}\n{agent_input}"
-        response, tool_calls = timed_turn(agent_input)
+        reply = None
+        try:
+            # Tell the agent who is texting (name + role from the database). Any look-alike
+            # sender line typed by the user is neutralised so it can't be spoofed.
+            sender_line = database.sender_context()
+            agent_input = message.replace("[Sender:", "(Sender:")
+            if sender_line:
+                agent_input = f"{sender_line}\n{agent_input}"
+            response, tool_calls = timed_turn(agent_input)
 
-        for round_num in range(1, MAX_TOOL_ROUNDS + 1):
-            if not tool_calls:
-                break
-            input_list = []
-            for tool_call in tool_calls:
-                result, error_type = self.dispatch(tool_call.name, tool_call.arguments, database)
-                record["tool_calls"].append({
-                    "round": round_num,
-                    "name": tool_call.name,
-                    "arguments": tool_call.arguments,   # raw string, as the model produced it
-                    "result": result,
-                    "error_type": error_type,
-                })
-                input_list.append({
-                    "type": "function_call",
-                    "call_id": tool_call.call_id,
-                    "name": tool_call.name,
-                    "arguments": tool_call.arguments,
-                })
-                input_list.append({
-                    "type": "function_call_output",
-                    "call_id": tool_call.call_id,
-                    "output": json.dumps({"result": result}, default=str),
-                })
-            print("ai responding to result")
-            response, tool_calls = timed_turn(input_list)
-        else:
-            # Loop finished without break: the agent still wanted more tools.
-            if tool_calls:
-                record["hit_round_cap"] = True
+            for round_num in range(1, MAX_TOOL_ROUNDS + 1):
+                if not tool_calls:
+                    break
+                input_list = []
+                for tool_call in tool_calls:
+                    result, error_type = self.dispatch(tool_call.name, tool_call.arguments, database)
+                    record["tool_calls"].append({
+                        "round": round_num,
+                        "name": tool_call.name,
+                        "arguments": tool_call.arguments,   # raw string, as the model produced it
+                        "result": result,
+                        "error_type": error_type,
+                    })
+                    input_list.append({
+                        "type": "function_call",
+                        "call_id": tool_call.call_id,
+                        "name": tool_call.name,
+                        "arguments": tool_call.arguments,
+                    })
+                    input_list.append({
+                        "type": "function_call_output",
+                        "call_id": tool_call.call_id,
+                        "output": json.dumps({"result": result}, default=str),
+                    })
+                print("ai responding to result")
+                response, tool_calls = timed_turn(input_list)
+            else:
+                # Loop finished without break: the agent still wanted more tools.
+                if tool_calls:
+                    record["hit_round_cap"] = True
 
-        if record["hit_round_cap"]:
-            reply = "Sorry, I wasn't able to complete that request. Please try again."
-        else:
-            reply = response.output_text
+            if record["hit_round_cap"]:
+                reply = "Sorry, I wasn't able to complete that request. Please try again."
+            else:
+                reply = response.output_text
+        finally:
+            # The database writes already happened, so tell the other party even if a later model call
+            # raised. Delivery problems are caught inside and never break the actor's reply.
+            self._deliver_notifications(database, record)
 
         record["reply"] = reply
         record["latency_s"] = round(record["latency_s"], 3)
@@ -215,6 +238,41 @@ class FoundryModel():
             database.set_convo_id(convo_id)
 
         return self.chat(message, convo_id, database)
+
+    #------------------------Notifications-----------------------------------
+    def _deliver_notifications(self, database, record):
+        """
+        Deliver the texts that Database queued during this turn (database.notifications).
+        Always recorded in the turn log; only delivered when a notifier / add_context is configured.
+        Each step is isolated: a failure is logged and never undoes the action or breaks the reply.
+        """
+        for to_id, to_phone, to_name, to_convo, text in database.notifications:
+            entry = {"to_id": to_id, "to_name": to_name, "text": text,
+                     "context_added": False, "sent": False, "error": None}
+            record["notifications"].append(entry)
+
+            # 1) put the notification in the recipient's own conversation first, so their reply has context
+            if self.add_context:
+                try:
+                    convo_id = to_convo or self.new_conversation()
+                    if not to_convo:
+                        database.set_convo_id(convo_id, person_id=to_id)
+                    self.add_assistant_message(convo_id, text)
+                    entry["context_added"] = True
+                except Exception as e:
+                    entry["error"] = f"context: {type(e).__name__}: {e}"
+                    print(f"could not add notification to {to_name}'s conversation: {e}")
+
+            # 2) then send the SMS
+            if self.notifier is not None:
+                try:
+                    ok = self.notifier(text, to_phone)
+                    entry["sent"] = ok is not False        # send_text returns False on a failed send
+                    if not entry["sent"]:
+                        entry["error"] = (entry["error"] or "") + " sms: send reported failure"
+                except Exception as e:
+                    entry["error"] = (entry["error"] or "") + f" sms: {type(e).__name__}: {e}"
+                    print(f"could not text {to_name}: {e}")
 
     #------------------------Logging-----------------------------------------
     def _log(self, record):

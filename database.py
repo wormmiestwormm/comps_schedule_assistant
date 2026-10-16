@@ -28,6 +28,7 @@ class Database:
         self.og_app = None
         self.temp_app = None
         self.student = None
+        self.notifications = [] #meant for sending text notifications to multiple people
 
     def _path(self, filename):
         return os.path.join(self.data_dir, filename)
@@ -70,6 +71,13 @@ class Database:
         print(f"user {phone_num} not found")
         return False
 
+    #the (single) tutor's row from the people CSV, or None if there isn't one
+    def get_tutor(self):
+        with open(self._path(PEOPLE_CSV), mode='r', encoding='utf-8') as file:
+            for p in csv.reader(file):
+                if len(p) > PEOPLE_ROLE and p[PEOPLE_ROLE].strip().lower() == "tutor":
+                    return p
+        return None
 
     #find student in database by name (for when a tutor needs to reference a specific student).
     def find_student(self, name):
@@ -141,12 +149,13 @@ class Database:
         return found
 
     #Set conversation id if none exists already
-    def set_convo_id(self, convo_id):
+    def set_convo_id(self, convo_id, person_id=None):
         # dtype=str: an empty convo_id column would otherwise load as float64
         # and reject a string value on current pandas versions.
         df = pd.read_csv(self._path(PEOPLE_CSV), dtype=str)
         df.columns = df.columns.str.strip()  # the header is ' convo_id' (leading space) in mock_people_database.csv
-        df.loc[df['id'] == str(self.user[PEOPLE_ID]), 'convo_id'] = convo_id
+        pid = person_id if person_id is not None else self.user[PEOPLE_ID]
+        df.loc[df['id'] == str(pid), 'convo_id'] = convo_id
         df.to_csv(self._path(PEOPLE_CSV), index=False)
 
     #get conversation id
@@ -272,7 +281,10 @@ class Database:
         conflict_check_result = self.check_conflicts(new_day, new_start, new_end)
         if conflict_check_result:
             return conflict_check_result
-        return self.append_new_temp_app(new_day, new_start, new_end)
+        return_message = self.append_new_temp_app(new_day, new_start, new_end)
+        start, end = self.convert_24_to_12h(self.temp_app[4], self.temp_app[5])
+        self._queue(self.get_tutor(), f"{self.user[PEOPLE_NAME]} asked to move their {o_app_day} appointment to {new_day} {start}-{end} (request #{self.temp_app[0]}). Reply to approve or deny.")
+        return return_message
 
 
     def check_conflicts(self, new_day, new_start, new_end):
@@ -299,13 +311,14 @@ class Database:
     def append_new_temp_app(self, new_day, new_start, new_end):
         df = pd.read_csv(self._path(TEMP_APPS_CSV))
         id = self._next_id(df)
+        ap_start, ap_end = self.convert_24_to_12h(new_start, new_end)  # raises on bad times, before anything is written
         new_temp_app = [id, self.og_app[0], self.user[0], new_day, new_start, new_end, 0, 0]
         print(f"new_temp_app: {new_temp_app}")
         with open(self._path(TEMP_APPS_CSV), mode='a', encoding='utf-8', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(new_temp_app)
 
-        ap_start, ap_end = self.convert_24_to_12h(new_start, new_end)
+        self.temp_app = new_temp_app
         #will also return message for the tutor, requires second phone number though
         return f"Appointment for {self.og_app[0]} changed to {new_day}, {ap_start}-{ap_end}."
     
@@ -340,6 +353,12 @@ class Database:
             return f"The appointment on {day} is already canceled."
 
         self.append_temp_cancel()
+        start, end = self.convert_24_to_12h(self.og_app[3], self.og_app[4])
+        if self.is_tutor():
+            text = f"Your tutor canceled your appointment on {day} {start}-{end}. Please consult them if you have any questions."
+        else:
+            text = f"{self.user[PEOPLE_NAME]} canceled their appointment on {day} {start}-{end}. Please discuss with them if you have any questions."
+        self._queue(self._other_party(), text)
         return f"appointment on {day} successfully canceled temporarily."
 
 
@@ -369,6 +388,11 @@ class Database:
         if len(remaining) == len(df):
             return f"temporary appointment {temp_id} could not be removed."
         remaining.to_csv(self._path(TEMP_APPS_CSV), index=False)
+        if self.is_tutor():
+            text = f"Your tutor canceled your reschedule request #{temp_id}."
+        else:
+            text = f"{self.user[PEOPLE_NAME]} has canceled their reschedule request #{temp_id}."
+        self._queue(self._other_party(), text)
         return f"temporary appointment {temp_id} removed."
 
 
@@ -396,6 +420,8 @@ class Database:
         #appointment, otherwise they would linger as orphans and still show up in schedule views
         temp = pd.read_csv(self._path(TEMP_APPS_CSV), dtype=str)
         temp[temp["app_id"] != removed_id].to_csv(self._path(TEMP_APPS_CSV), index=False)
+        start, end = self.convert_24_to_12h(self.og_app[3], self.og_app[4])
+        self._queue(self.student, f"You no longer have an appointment on {self.og_app[2]} {start}-{end} with your tutor. Please consult them if you have any questions.")
         return f"appointment {removed_id} for {student_name} on {self.og_app[2]} permanently removed."
 
 
@@ -425,6 +451,9 @@ class Database:
         df = pd.read_csv(self._path(TEMP_APPS_CSV))
         df.loc[df['temp_id'] == int(temp_id), 'approval'] = approval_value
         df.to_csv(self._path(TEMP_APPS_CSV), index=False)
+        approval_str = "approved!" if approval_value == 1 else "denied, please talk to your tutor."
+        start, end = self.convert_24_to_12h(self.temp_app[4], self.temp_app[5])
+        self._queue(self.student, f"Your reschedule request #{temp_id} ({self.temp_app[3]} {start}-{end}) was {approval_str}")
         return f"temporary appointment {temp_id} {'approved' if approval_value else 'denied'}"
 
 
@@ -468,3 +497,26 @@ class Database:
         obj_start = datetime.strptime(start_str, "%H:%M")
         obj_end = datetime.strptime(end_str, "%H:%M")
         return obj_start.strftime("%I:%M %p"), obj_end.strftime("%I:%M %p")
+
+    #-------------------------------------Text Notifications------------------------------------------------------
+    #Queue a text for `recipient` (a people-CSV row). Called by the tool methods ONLY after their write
+    #succeeded. Nothing is sent here: foundry_module delivers self.notifications after the turn.
+    def _queue(self, recipient, text):
+        if recipient is None:
+            return None
+        if recipient[PEOPLE_ID] == self.user[PEOPLE_ID]:
+            return None  #don't send notifications to the person you're already responding to.
+        self.notifications.append((
+            recipient[PEOPLE_ID],
+            recipient[PEOPLE_PHONE],
+            recipient[PEOPLE_NAME],
+            recipient[PEOPLE_CONVO] if len(recipient) > PEOPLE_CONVO else "",
+            text
+        ))
+        return True
+
+    #who needs to hear about an action the sender took on self.student
+    def _other_party(self):
+        if self.is_tutor():
+            return self.student
+        return self.get_tutor()

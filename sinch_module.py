@@ -10,7 +10,8 @@ class SinchModule():
     def __init__(self):
         load_dotenv()
         
-        self.foundry_module = FoundryModel()
+        #notifier: lets the backend text the OTHER party (tutor <-> student) after an action succeeds
+        self.foundry_module = FoundryModel(notifier=self.send_text)
         # retrieve sinch client information
         self.sinch_client = SinchClient(
             key_id = os.environ.get("SINCHUSER"),
@@ -31,6 +32,9 @@ class SinchModule():
         sender_identity = message.get("channel_identity", {}).get("identity", "")
         
         print(f"Received from {sender_identity} via {channel}: {text}")
+        if not text or not sender_identity:
+            #not a user message (e.g. a delivery receipt for one of our notification texts): ignore it
+            return jsonify({"status": "ignored"}), 200
         self.main(text, sender_identity)
         
         return jsonify({"status": "ok"}), 200
@@ -71,10 +75,9 @@ class SinchModule():
         response = requests.post(self.url, json=payload, headers=headers, 
         auth=(os.environ.get('SINCHUSER'), os.environ.get('SINCHPASSWORD')))
 
-        data = response.json()
         print("SEND STATUS:", response.status_code)
         print("SEND BODY:", response.text)
-        print(data)
+        return response.ok   #FoundryModel uses this to log notification texts that failed to send
         
 app = Flask(__name__)
 module = SinchModule()
