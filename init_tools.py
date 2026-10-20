@@ -196,7 +196,7 @@ def build_tools():
         description="Tutor only. Gather information necessary to PERMANENTLY remove a regular appointment from the schedule. Gather the student name, the appointment day and, only if needed, the app_id. DO NOT use this for one-time cancellations.",
         strict=True
     )
-
+    """
     availability_arguments = FunctionTool(
         name="availability_arguments",
         parameters={
@@ -213,7 +213,8 @@ def build_tools():
         description="Gather information necessary to view the time availability for potential reschedules or new appointments.",
         strict=True
     )
+    """
 
     tools = [view_app_arguments, add_student_arguments, add_app_arguments, add_reschedule_request_arguments, approve_request_arguments,
-             cancel_appointment_arguments, cancel_reschedule_arguments, remove_appointment_arguments, availability_arguments]
+             cancel_appointment_arguments, cancel_reschedule_arguments, remove_appointment_arguments]
     return tools

@@ -175,6 +175,11 @@ class Database:
                 app[start_index], app[end_index]
             )
         return app_list
+    
+    def _convert_tuple_list_times(self, available_slots):
+            for start, end in available_slots:
+                start, end = self.convert_24_to_12h(start, end)
+            return available_slots
 
     @staticmethod
     def _is_active_temp(app):
@@ -271,6 +276,56 @@ class Database:
                 if app[1] == self.student[0]:
                     return_list.append(app)
         return self._convert_app_list_times(return_list)
+    
+    def find_availability(self, day=None):
+        if day:
+            available_slots = self.availability_for_day(day)
+            return self._convert_tuple_list_times(available_slots)
+        
+    
+    def availability_for_day(self, day):
+        occupied_times = []
+        og_app_ids = []
+        with open(self._path(TEMP_APPS_CSV), mode='r', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            for app in reader:
+                if app[3] == "canceled" and str(app[7]) == "0":
+                    og_app_ids.append(app[1])
+                elif self._is_active_temp(app) and app[3].lower() == day:
+                    occupied_times.append((app[4], app[5]))
+                    og_app_ids.append(app[1])
+        with open(self._path(SCHEDULE_CSV), mode='r', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            for app in reader:
+                # schedule rows are [app_id, student_id, day, start, end]
+                if len(app) > 2 and app[2].lower() == day and app[0] not in og_app_ids:
+                    occupied_times.append((app[3], app[4]))
+        
+        occupied_times = sorted(occupied_times)
+        available_slots = [("8:00", "20:00")]
+            
+        for app_start, app_end in occupied_times:
+            next_available_slots = []
+            
+            for slot_start, slot_end in available_slots:
+                # Case 1: Appointment is completely outside this slot
+                if app_end <= slot_start or app_start >= slot_end:
+                    next_available_slots.append((slot_start, slot_end))
+                
+                else:
+                    # Case 2: There is time available BEFORE the appointment starts
+                    if app_start > slot_start:
+                        next_available_slots.append((slot_start, app_start))
+                    
+                    # Case 3: There is time available AFTER the appointment ends
+                    if app_end < slot_end:
+                        next_available_slots.append((app_end, slot_end))
+                        
+            available_slots = next_available_slots
+            
+        return available_slots
+                    
+        
 
     #--------------------------Reschedule Process-----------------------------
     #check for conflicts with standard schedule AND any existing temp appointments
