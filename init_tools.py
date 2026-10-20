@@ -41,7 +41,7 @@ def build_tools():
                 },
                 "phone_num": {
                     "type": "string",
-                    "description": "The phone number of the student."
+                    "description": "The phone number of the student. Formatted as a string of digits. ex: \"3102149876\"."
                 }
             },
             "required": ["name", "phone_num"],
