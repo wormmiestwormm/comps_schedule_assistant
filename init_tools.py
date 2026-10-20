@@ -17,7 +17,7 @@ def build_tools():
             "properties": {
                 "specificity": {
                         "type": "integer",
-                        "description": "The filter the user wants to view their schedule with. 0 = their own schedule, 1 = the entire schedule, 2 = the schedule for the current day, 3 = the schedule for a specific student that is not the user."
+                        "description": "The filter the user wants to view their schedule with. 0 = their own schedule, 1 = the entire schedule (if the user asks for a schedule on a specific day, use this input), 2 = the schedule for the current day, 3 = the schedule for a specific student that is not the user."
                 },
                 "student_name": {
                     "type": ["string", "null"],
@@ -197,6 +197,23 @@ def build_tools():
         strict=True
     )
 
+    availability_arguments = FunctionTool(
+        name="availability_arguments",
+        parameters={
+            "type": "object",
+            "properties": {
+                "day": {
+                    "type": ["string", "null"],
+                    "description": "The day the user wants to view availability for. May be left as null."
+                },
+            },
+            "required": ["day"],
+            "additionalProperties": False
+        },
+        description="Gather information necessary to view the time availability for potential reschedules or new appointments.",
+        strict=True
+    )
+
     tools = [view_app_arguments, add_student_arguments, add_app_arguments, add_reschedule_request_arguments, approve_request_arguments,
-             cancel_appointment_arguments, cancel_reschedule_arguments, remove_appointment_arguments]
+             cancel_appointment_arguments, cancel_reschedule_arguments, remove_appointment_arguments, availability_arguments]
     return tools
