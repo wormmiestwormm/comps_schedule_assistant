@@ -17,7 +17,7 @@ def build_tools():
             "properties": {
                 "specificity": {
                         "type": "integer",
-                        "description": "The filter the user wants to view their schedule with. 0 = their own schedule, 1 = the entire schedule (if the user asks for a schedule on a specific day, use this input), 2 = the schedule for the current day, 3 = the schedule for a specific student that is not the user."
+                        "description": "The filter the user wants to view their schedule with. 0 = their own schedule, 1 = the entire schedule (if the user asks for a schedule on a specific day, or asks for availability, use this input), 2 = the schedule for the current day, 3 = the schedule for a specific student that is not the user."
                 },
                 "student_name": {
                     "type": ["string", "null"],
@@ -41,7 +41,7 @@ def build_tools():
                 },
                 "phone_num": {
                     "type": "string",
-                    "description": "The phone number of the student. Formatted as a string of digits. ex: \"3102149876\"."
+                    "description": "The phone number of the student. Formatted as a string of 11 digits, and will always be 1. ex: \"13102149876\"."
                 }
             },
             "required": ["name", "phone_num"],

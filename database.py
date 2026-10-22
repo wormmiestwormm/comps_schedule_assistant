@@ -170,10 +170,8 @@ class Database:
         for app in app_list:
             if app[0] in ("app_id", "temp_id"):
                 continue
-            start_index, end_index = (4, 5) if len(app) > 5 else (3, 4)
-            app[start_index], app[end_index] = self.convert_24_to_12h(
-                app[start_index], app[end_index]
-            )
+            start_index, end_index = 3, 4
+            app[start_index], app[start_index] = self.convert_24_to_12h(app[start_index], app[start_index])
         return app_list
     
     def _convert_tuple_list_times(self, available_slots):
@@ -215,13 +213,14 @@ class Database:
                 if app[3] == "canceled" and str(app[7]) == "0":
                     og_app_ids.append(app[1])
                 elif self._is_active_temp(app):
-                    return_list.append(app)
+                    return_list.append([self._get_student_name(app[2]), app[3], app[4], app[5]])
                     og_app_ids.append(app[1])
         with open(self._path(SCHEDULE_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
                 if app[0] not in og_app_ids:
-                    return_list.append(app)
+                    return_list.append([self._get_student_name(app[1]), app[2], app[3], app[4]])
+                    
         return self._convert_app_list_times(return_list)
 
 
@@ -237,14 +236,14 @@ class Database:
                 if app[3] == "canceled" and str(app[7]) == "0":
                     og_app_ids.append(app[1])
                 elif self._is_active_temp(app) and app[3].lower() == curr_day:
-                    return_list.append(app)
+                    return_list.append([self._get_student_name(app[2]), app[3], app[4], app[5]])
                     og_app_ids.append(app[1])
         with open(self._path(SCHEDULE_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
                 # schedule rows are [app_id, student_id, day, start, end]
                 if len(app) > 2 and app[2].lower() == curr_day and app[0] not in og_app_ids:
-                    return_list.append(app)
+                    return_list.append([self._get_student_name(app[1]), app[2], app[3], app[4]])
         return self._convert_app_list_times(return_list)
 
 
@@ -258,14 +257,15 @@ class Database:
                 if app[3] == "canceled" and str(app[7]) == "0":
                     og_app_ids.append(app[1])
                 elif len(app) > 2 and app[2] == person[0] and self._is_active_temp(app):
-                    return_list.append(app)
+                    return_list.append([self._get_student_name(app[2]), app[3], app[4], app[5]])
                     og_app_ids.append(app[1])
         with open(self._path(SCHEDULE_CSV), mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             for app in reader:
                 if app[1] == person[0] and app[0] not in og_app_ids:
-                    return_list.append(app)
+                    return_list.append([self._get_student_name(app[1]), app[2], app[3], app[4]])
         return self._convert_app_list_times(return_list)
+    
     
     #returns app or temp app for user
     def return_student_app_list(self):
@@ -277,6 +277,14 @@ class Database:
                     return_list.append(app)
         return self._convert_app_list_times(return_list)
     
+    
+    def _get_student_name(self, student_id):
+        df = pd.read_csv(self._path(PEOPLE_CSV), dtype=str)
+        student = df[df["student_id"] != str(student_id)]
+        return student[PEOPLE_NAME]
+    
+    
+    #unfinished availability specific methods, not used anywhere, no plans for implementation currently.
     def find_availability(self, day=None):
         if day:
             available_slots = self.availability_for_day(day)
