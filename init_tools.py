@@ -196,6 +196,7 @@ def build_tools():
         description="Tutor only. Gather information necessary to PERMANENTLY remove a regular appointment from the schedule. Gather the student name, the appointment day and, only if needed, the app_id. DO NOT use this for one-time cancellations.",
         strict=True
     )
+    #unused availability tool, not currently planned for implementation.
     """
     availability_arguments = FunctionTool(
         name="availability_arguments",
