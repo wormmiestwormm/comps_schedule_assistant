@@ -17,7 +17,7 @@ def build_tools():
             "properties": {
                 "specificity": {
                         "type": "integer",
-                        "description": "The filter the user wants to view their schedule with. 0 = their own schedule, 1 = the entire schedule (if the user asks for a schedule on a specific day, or asks for availability, use this input), 2 = the schedule for the current day, 3 = the schedule for a specific student that is not the user."
+                        "description": "The filter the user wants to view their schedule with. 0 = their own schedule, 1 = the entire schedule (if the user asks for a schedule on a specific day, use this input), 2 = the schedule for the current day, 3 = the schedule for a specific student that is not the user. If the user asks for availability, input 1 or 2 depending on whether the user wants to view general availability or availability on a specific day."
                 },
                 "student_name": {
                     "type": ["string", "null"],
