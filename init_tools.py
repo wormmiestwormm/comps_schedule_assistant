@@ -193,7 +193,7 @@ def build_tools():
             "required": ["student_name", "day", "app_id"],
             "additionalProperties": False
         },
-        description="Tutor only. Gather information necessary to PERMANENTLY remove a regular appointment from the schedule. Gather the student name, the appointment day and, only if needed, the app_id. DO NOT use this for one-time cancellations.",
+        description="Tutor only. Gather information necessary to PERMANENTLY remove a regular appointment from the schedule. Gather the student name, the appointment day and, ONLY if needed, the app_id. The student name and appointment day should be enough most of the time. DO NOT use this for one-time cancellations. Permanent appointment removals may include words like \'permanently\' or \'forever\'.",
         strict=True
     )
     #unused availability tool, not currently planned for implementation.

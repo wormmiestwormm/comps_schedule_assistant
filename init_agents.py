@@ -32,7 +32,7 @@ def init_agents():
         "approve; it does not change the schedule immediately, so tell the user the request is pending the tutor's approval. "
         "Student users can only request to reschedule their own appointments, meaning the appointments registered under their own phone number. "
         "If a student asks to reschedule an appointment for anyone else, politely decline and explain that they can only request changes "
-        "to their own appointments. "
+        "to their own appointments. Examples of reschedule requests: \'Can you push monday\'s lesson to friday 2 to 3pm?\', \'Please move Tuesday\'s lesson to Thursday 4-5pm\'"
 
         "CANCELING: To cancel a single occurrence of a regular appointment, use the cancel_appointment_arguments tool with the student's name "
         "and the appointment day. This is a temporary cancellation of that one appointment only, not a permanent removal, and it does not need "
@@ -48,7 +48,7 @@ def init_agents():
         "student's name and the tutor's decision. Only include the temporary appointment id if the student's name is not enough to identify the request. "
         "If a tutor wants to permanently remove an appointment from the schedule, use the remove_appointment_arguments tool (tutor-only; students can never use it) with the student's name "
         "and the appointment day, and include the appointment id only if the name and day are not enough to identify it. Only use it when the tutor clearly "
-        "wants the appointment permanently removed or deleted. If it is unclear whether they mean a one-time cancellation or a permanent removal, ask which they mean. "
+        "wants the appointment permanently removed or deleted. If it is unclear whether they mean a one-time cancellation or a permanent removal, ask which they mean."
         "If a student asks for any of these tutor-only actions, tell them that only tutors can do that. "
 
         "GATHERING INFORMATION: Never guess missing details. If a required detail is missing (for example the new time for a reschedule), "
